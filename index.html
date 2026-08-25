@@ -474,11 +474,13 @@ button{cursor:pointer}
             <div class="chip-group" id="region-chips">
               <button class="chip on" data-region="all">すべての地方</button>
               <button class="chip" data-region="shinou">シンオウ</button>
-              <button class="chip" data-region="isshu">イッシュ</button>
-              <button class="chip" data-region="kanto">カントー</button>
               <button class="chip" data-region="jouto">ジョウト</button>
+              <button class="chip" data-region="kanto">カントー</button>
+              <button class="chip" data-region="isshu">イッシュ</button>
+              <button class="chip" data-region="kalos">カロス</button>
+              <button class="chip" data-region="houen">ホウエン</button>
+              <button class="chip" data-region="alola">アローラ</button>
             </div>
-            <div class="sample-note">※ プレビューにつき地方は一部のみ表示。本番では登録済みROMの世代に応じて自動で出し分けます。</div>
           </div>
         </details>
 
@@ -1785,6 +1787,10 @@ button{cursor:pointer}
     } else {
       // ROMが1件も無い場合、まず安全のため空状態の表示にしておく(リダイレクト失敗時の保険)
       showEmptyRomState();
+      if(cameFromWelcomeFlag){
+        // welcome.htmlの「＋ソフトを追加する」から来た場合は、リダイレクトせずこのままソフト追加シートを開く
+        return;
+      }
       const everHadRom = await idbGet('everHadRom');
       if(!everHadRom){
         // 一度もソフトを追加したことが無い(初回訪問とみなせる)場合はwelcome.htmlへ
@@ -1794,13 +1800,17 @@ button{cursor:pointer}
       // 過去に追加したが今は0件(全部削除した等)の場合は、空状態表示のままでよい
     }
   }
+  // welcome.html経由(?openAdd=1)で来たかどうかを、URL変更前に確定させておく
+  const cameFromWelcomeFlag = new URLSearchParams(location.search).get('openAdd')==='1';
+  if(cameFromWelcomeFlag){
+    // URLを先に綺麗にしておく(再読み込み時に毎回開かないように)。initAppより前に行っても、上のフラグで判定は済んでいるので問題ない。
+    history.replaceState(null, '', location.pathname);
+  }
+
   initApp();
 
-  // welcome.html経由(?openAdd=1)で来た場合は、ソフト追加シートを自動で開く
-  if(new URLSearchParams(location.search).get('openAdd')==='1'){
+  if(cameFromWelcomeFlag){
     setTimeout(()=>{ $('#add-rom').click(); }, 300);
-    // URLを綺麗にしておく(再読み込み時に毎回開かないように)
-    history.replaceState(null, '', location.pathname);
   }
 
   function showEmptyRomState(){
