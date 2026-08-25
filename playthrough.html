@@ -132,7 +132,7 @@ button,label{touch-action:manipulation}
 <body>
 
 <header class="topbar">
-  <a href="index.html" class="top-action" aria-label="図鑑にもどる">‹</a>
+  <a href="index.html" class="top-action" id="back-to-index" aria-label="図鑑にもどる">‹</a>
   <div class="brand">周回メモ</div>
   <span></span>
 </header>
@@ -243,20 +243,48 @@ button,label{touch-action:manipulation}
     if(dbPromise) return dbPromise;
     dbPromise = new Promise((resolve, reject)=>{
       if(!window.indexedDB){ reject(new Error('IndexedDB非対応のブラウザです')); return; }
+      let settled = false;
+      const timeoutId = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        dbPromise = null;
+        reject(new Error('IndexedDB接続がタイムアウトしました'));
+      }, 5000);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = (e)=>{
         const db = e.target.result;
         if(!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
       };
-      req.onsuccess = (e)=> resolve(e.target.result);
-      req.onerror = (e)=> reject(e.target.error);
+      req.onsuccess = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(e.target.result);
+      };
+      req.onerror = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbPromise = null;
+        reject(e.target.error);
+      };
+      req.onblocked = ()=>{ /* タイムアウトに任せる */ };
     });
     return dbPromise;
+  }
+  async function closeDbConnection(){
+    try{
+      if(dbPromise){
+        const db = await dbPromise;
+        if(db && db.close) db.close();
+      }
+    }catch(e){}
+    dbPromise = null;
   }
   async function idbSet(key, value){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).put(value, key);
         tx.oncomplete = ()=> resolve(true);
@@ -267,7 +295,7 @@ button,label{touch-action:manipulation}
   async function idbGet(key){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readonly');
         const req = tx.objectStore(STORE_NAME).get(key);
         req.onsuccess = ()=> resolve(req.result);
@@ -553,6 +581,16 @@ button,label{touch-action:manipulation}
     if(document.visibilityState==='hidden') saveMemoState();
   });
   window.addEventListener('pagehide', ()=>{ saveMemoState(); });
+
+  const backLink = $('#back-to-index');
+  if(backLink){
+    backLink.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      await saveMemoState();
+      await closeDbConnection();
+      location.href = 'index.html';
+    });
+  }
 })();
 </script>
 

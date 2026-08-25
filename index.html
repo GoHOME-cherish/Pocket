@@ -439,9 +439,9 @@ button{cursor:pointer}
 
     <nav class="menu">
       <button><span>引っ越し</span><span class="arrow">›</span></button>
-      <a href="distribution.html" class="menu-link"><span>配布</span><span class="arrow">›</span></a>
+      <a href="distribution.html" class="menu-link" id="link-to-distribution"><span>配布</span><span class="arrow">›</span></a>
       <button><span>タスク</span><span class="arrow">›</span></button>
-      <a href="playthrough.html" class="menu-link"><span>周回メモ</span><span class="arrow">›</span></a>
+      <a href="playthrough.html" class="menu-link" id="link-to-playthrough"><span>周回メモ</span><span class="arrow">›</span></a>
       <button id="backup-btn"><span>書き出し・読み込み</span><span class="arrow">›</span></button>
       <button><span>設定</span><span class="arrow">›</span></button>
     </nav>
@@ -734,6 +734,14 @@ button{cursor:pointer}
         reject(new Error('IndexedDB非対応のブラウザです'));
         return;
       }
+      let settled = false;
+      const timeoutId = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        dlog('openDb: タイムアウト(5秒経過、onblocked等で応答なし)');
+        dbPromise = null; // 次回リトライできるようにクリア
+        reject(new Error('IndexedDB接続がタイムアウトしました'));
+      }, 5000);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = (e)=>{
         const db = e.target.result;
@@ -741,10 +749,22 @@ button{cursor:pointer}
           db.createObjectStore(STORE_NAME);
         }
       };
-      req.onsuccess = (e)=> resolve(e.target.result);
-      req.onerror = (e)=> reject(e.target.error);
+      req.onsuccess = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(e.target.result);
+      };
+      req.onerror = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbPromise = null;
+        reject(e.target.error);
+      };
       req.onblocked = ()=>{
-        dlog('openDb: onblocked発火(他タブが接続を保持中の可能性)');
+        dlog('openDb: onblocked発火(他タブ/ページが接続を保持中の可能性)。タイムアウト待ち。');
+        // ここではresolve/rejectしない。タイムアウトに任せるか、後続でblockedが解消されればonsuccessが呼ばれる。
       };
     });
     return dbPromise;
@@ -1873,7 +1893,35 @@ button{cursor:pointer}
     if(emptyBtn) emptyBtn.addEventListener('click', ()=>{ $('#add-rom').click(); });
   }
 
+  // ページ遷移前にIndexedDB接続を明示的に閉じる(次ページのonblocked固まりを防ぐ)
+  async function closeDbConnection(){
+    try{
+      if(dbPromise){
+        const db = await dbPromise;
+        if(db && db.close) db.close();
+      }
+    }catch(e){ /* 既にエラーになっている接続は無視 */ }
+    dbPromise = null;
+  }
+
   // ページ離脱・非表示時に即時保存(デバウンスを待たず確実に保存する)
+  function setupSafeNavigation(linkId, destUrl){
+    const el = $('#'+linkId);
+    if(!el) return;
+    el.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      dlog(`${linkId}クリック: 保存→DB切断→遷移 を開始`);
+      await saveDexState();
+      await saveRomList();
+      await closeDbConnection();
+      dlog(`${linkId}: 遷移実行`);
+      location.href = destUrl;
+    });
+  }
+  setupSafeNavigation('link-to-distribution', 'distribution.html');
+  setupSafeNavigation('link-to-playthrough', 'playthrough.html');
+
+
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState==='hidden'){
       dlog('visibilitychange(hidden) 発火 → saveDexState/saveRomList呼び出し');

@@ -99,7 +99,7 @@ button,label{touch-action:manipulation}
 <body>
 
 <header class="topbar">
-  <a href="index.html" class="top-action" aria-label="図鑑にもどる">‹</a>
+  <a href="index.html" class="top-action" id="back-to-index" aria-label="図鑑にもどる">‹</a>
   <div class="brand">配布図鑑</div>
   <span></span>
 </header>
@@ -168,15 +168,46 @@ button,label{touch-action:manipulation}
     if(dbPromise) return dbPromise;
     dbPromise = new Promise((resolve, reject)=>{
       if(!window.indexedDB){ reject(new Error('IndexedDB非対応のブラウザです')); return; }
+      let settled = false;
+      const timeoutId = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        dlog('openDb: タイムアウト(5秒経過)');
+        dbPromise = null;
+        reject(new Error('IndexedDB接続がタイムアウトしました'));
+      }, 5000);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = (e)=>{
         const db = e.target.result;
         if(!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
       };
-      req.onsuccess = (e)=> resolve(e.target.result);
-      req.onerror = (e)=> reject(e.target.error);
+      req.onsuccess = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(e.target.result);
+      };
+      req.onerror = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbPromise = null;
+        reject(e.target.error);
+      };
+      req.onblocked = ()=>{
+        dlog('openDb: onblocked発火。タイムアウト待ち。');
+      };
     });
     return dbPromise;
+  }
+  async function closeDbConnection(){
+    try{
+      if(dbPromise){
+        const db = await dbPromise;
+        if(db && db.close) db.close();
+      }
+    }catch(e){}
+    dbPromise = null;
   }
   async function idbSet(key, value){
     try{
@@ -437,6 +468,17 @@ button,label{touch-action:manipulation}
     dlog('pagehide → saveState');
     saveState();
   });
+
+  const backLink = $('#back-to-index');
+  if(backLink){
+    backLink.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      dlog('戻るリンククリック: 保存→DB切断→遷移');
+      await saveState();
+      await closeDbConnection();
+      location.href = 'index.html';
+    });
+  }
 })();
 </script>
 
