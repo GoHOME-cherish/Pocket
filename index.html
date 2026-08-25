@@ -392,6 +392,8 @@ button{cursor:pointer}
     <label class="top-action" for="right-toggle" aria-label="全ROM横断検索">🔍</label>
   </header>
 
+  <div id="debug-log-panel" style="position:relative;z-index:200;background:#fff3cd;border-bottom:2px solid #e0a800;padding:8px 10px;font-size:9px;font-family:monospace;max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.6"></div>
+
   <label class="overlay" for="drawer-none" id="overlay-left"></label>
   <label class="overlay" for="drawer-none" id="overlay-right"></label>
 
@@ -686,6 +688,30 @@ button{cursor:pointer}
 <script>
 (function(){
   const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+
+  // ===== 一時的なデバッグログ(不具合調査用) =====
+  function dlog(msg){
+    try{
+      const key = 'gohome_debug_log';
+      const now = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+      const line = `[${now}] [index] ${msg}`;
+      const prev = localStorage.getItem(key) || '';
+      const lines = (prev + '\n' + line).split('\n').slice(-40); // 直近40行だけ保持
+      localStorage.setItem(key, lines.join('\n'));
+      const panel = document.getElementById('debug-log-panel');
+      if(panel) panel.textContent = lines.join('\n');
+    }catch(e){ /* localStorage不可の環境では何もしない */ }
+  }
+  // ページ表示時、保存済みログをすぐパネルに反映
+  (function showSavedLog(){
+    try{
+      const saved = localStorage.getItem('gohome_debug_log');
+      const panel = document.getElementById('debug-log-panel');
+      if(saved && panel) panel.textContent = saved;
+    }catch(e){}
+  })();
+  dlog('index.html DOMスクリプト開始');
+
   function closeDrawers(){ $('#drawer-none').checked=true; }
 
   const NATURES = ["がんばりや","さみしがり","いじっぱり","やんちゃ","ゆうかん","ずぶとい","すなお","わんぱく","のうてんき","のんき","ひかえめ","おっとり","てれや","うっかりや","れいせい","おだやか","おとなしい","しんちょう","きまぐれ","なまいき","おくびょう","せっかち","ようき","むじゃき","まじめ"];
@@ -779,12 +805,14 @@ button{cursor:pointer}
       base: btn.dataset.base,
       active: btn.classList.contains('active')
     }));
+    dlog(`saveRomList呼び出し: ${roms.length}件を保存 [${roms.map(r=>r.name).join(',')}]`);
     await idbSet('romList', roms);
   }
   const saveRomListDebounced = debounce(saveRomList, 400);
 
   async function restoreRomList(){
     const saved = await idbGet('romList');
+    dlog(`restoreRomList: 読み込んだ件数=${saved ? saved.length : 'null'}`);
     if(!saved || !saved.length) return false;
     const romListEl = $('#rom-list');
     romListEl.innerHTML = '';
@@ -795,6 +823,7 @@ button{cursor:pointer}
       btn.innerHTML=romInnerHtml(r.name, r.base);
       romListEl.appendChild(btn);
     });
+    dlog(`restoreRomList: DOMに${saved.length}件復元完了`);
     return true;
   }
 
@@ -1775,9 +1804,11 @@ button{cursor:pointer}
 
   // 初期化: 保存済みのSOFTWARE LISTがあれば復元してから、表示中ROMの図鑑を読み込む
   async function initApp(){
+    dlog('initApp開始');
     const restored = await restoreRomList();
     if(restored) syncRomChips();
     const activeRomBtn = $('#rom-list .rom.active') || $('#rom-list .rom');
+    dlog(`initApp: activeRomBtn=${activeRomBtn ? activeRomBtn.dataset.rom : 'なし'}`);
     if(activeRomBtn){
       currentRomId = activeRomBtn.dataset.romId;
       const name = activeRomBtn.dataset.rom, base = activeRomBtn.dataset.base;
@@ -1786,6 +1817,7 @@ button{cursor:pointer}
       await loadGameData(gameId);
     } else {
       // ROMが1件も無い場合、まず安全のため空状態の表示にしておく(リダイレクト失敗時の保険)
+      dlog('initApp: ROM0件 → showEmptyRomState');
       showEmptyRomState();
       if(cameFromWelcomeFlag){
         // welcome.htmlの「＋ソフトを追加する」から来た場合は、リダイレクトせずこのままソフト追加シートを開く
@@ -1794,6 +1826,7 @@ button{cursor:pointer}
       const everHadRom = await idbGet('everHadRom');
       if(!everHadRom){
         // 一度もソフトを追加したことが無い(初回訪問とみなせる)場合はwelcome.htmlへ
+        dlog('initApp: everHadRomなし → welcome.htmlへリダイレクト');
         location.href = 'welcome.html';
         return;
       }
@@ -1835,9 +1868,16 @@ button{cursor:pointer}
 
   // ページ離脱・非表示時に即時保存(デバウンスを待たず確実に保存する)
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='hidden'){ saveDexState(); saveRomList(); }
+    if(document.visibilityState==='hidden'){
+      dlog('visibilitychange(hidden) 発火 → saveDexState/saveRomList呼び出し');
+      saveDexState(); saveRomList();
+    }
   });
-  window.addEventListener('pagehide', ()=>{ saveDexState(); saveRomList(); });
+  window.addEventListener('pagehide', ()=>{
+    dlog('pagehide 発火 → saveDexState/saveRomList呼び出し');
+    saveDexState(); saveRomList();
+  });
+  dlog('index.html 初期化完了(initApp呼び出し直前)');
 })();
 </script>
 

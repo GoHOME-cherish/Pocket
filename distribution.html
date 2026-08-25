@@ -104,6 +104,8 @@ button,label{touch-action:manipulation}
   <span></span>
 </header>
 
+<div id="debug-log-panel" style="background:#fff3cd;border-bottom:2px solid #e0a800;padding:8px 10px;font-size:9px;font-family:monospace;max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.6"></div>
+
 <main class="main">
 
   <div class="note-box">💡 過去に公式から配布された特別なポケモンの一覧です。💌は「ふしぎなおくりもの」のカードデータを保存しているか、🤝は実際に受け取り済みかを記録できます。データは自動保存されます。</div>
@@ -129,6 +131,29 @@ button,label{touch-action:manipulation}
 <script>
 (function(){
   const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+
+  // ===== 一時的なデバッグログ(不具合調査用) =====
+  function dlog(msg){
+    try{
+      const key = 'gohome_debug_log';
+      const now = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+      const line = `[${now}] [distribution] ${msg}`;
+      const prev = localStorage.getItem(key) || '';
+      const lines = (prev + '\n' + line).split('\n').slice(-40);
+      localStorage.setItem(key, lines.join('\n'));
+      const panel = document.getElementById('debug-log-panel');
+      if(panel) panel.textContent = lines.join('\n');
+    }catch(e){}
+  }
+  (function showSavedLog(){
+    try{
+      const saved = localStorage.getItem('gohome_debug_log');
+      const panel = document.getElementById('debug-log-panel');
+      if(saved && panel) panel.textContent = saved;
+    }catch(e){}
+  })();
+  dlog('distribution.html スクリプト開始');
+
 
   // ===== IndexedDB (index.html/playthrough.htmlと共有) =====
   const DB_NAME = 'gohome_cherish_db';
@@ -201,8 +226,18 @@ button,label{touch-action:manipulation}
   let searchQuery = '';
 
   async function loadEvents(){
-    const res = await fetch('data/distribution_events.json');
-    allEvents = await res.json();
+    dlog('loadEvents開始: fetch(data/distribution_events.json)');
+    try{
+      const res = await fetch('data/distribution_events.json');
+      dlog(`fetch結果: status=${res.status} ok=${res.ok}`);
+      if(!res.ok) throw new Error('fetch failed: '+res.status);
+      allEvents = await res.json();
+      dlog(`JSON parse成功: ${allEvents.length}件`);
+    }catch(err){
+      dlog(`loadEvents失敗: ${err.message}`);
+      $('#dist-list').innerHTML = '<div class="empty-note">配布データを読み込めませんでした。<br>data/distribution_events.json の設置状況をご確認ください。</div>';
+      return;
+    }
     const saved = await idbGet('distributionState');
     eventState = saved || {};
     buildGameFilterChips();
@@ -336,12 +371,19 @@ button,label{touch-action:manipulation}
     }
   });
 
+  dlog('loadEvents呼び出し直前');
   loadEvents();
 
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='hidden') saveState();
+    if(document.visibilityState==='hidden'){
+      dlog('visibilitychange(hidden) → saveState');
+      saveState();
+    }
   });
-  window.addEventListener('pagehide', ()=>{ saveState(); });
+  window.addEventListener('pagehide', ()=>{
+    dlog('pagehide → saveState');
+    saveState();
+  });
 })();
 </script>
 
