@@ -7,7 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GoHOME cherish">
-<title>GoHOME cherish — BW以前 preview</title>
+<title>GoHOME cherish</title>
+<meta name="description" content="Pokémon HOME以前のポケモンを大切にしまっておくための、ブラウザだけで動くコレクション管理ツール。">
+<meta property="og:title" content="GoHOME cherish">
+<meta property="og:description" content="Pokémon HOME以前のポケモンを大切にしまっておくための、ブラウザだけで動くコレクション管理ツール。">
+<meta property="og:type" content="website">
 <style>
 :root{
   --bg:#f5f4f1;
@@ -78,9 +82,12 @@ button{cursor:pointer}
   box-shadow:0 10px 28px rgba(30,30,30,.10);padding:12px;z-index:20;border-radius:8px
 }
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.field{display:grid;gap:4px;font-size:9px;color:var(--muted)}
+.field{display:grid;gap:4px;font-size:9px;color:var(--muted);min-width:0}
 .field input,.field select,.field textarea{
-  width:100%;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 8px;font-size:11px;outline:none
+  width:100%;max-width:100%;box-sizing:border-box;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 8px;font-size:11px;outline:none
+}
+.field input[type="date"]{
+  min-width:0;-webkit-appearance:none;appearance:none;font-size:10.5px;padding:6px 4px
 }
 .filters{display:flex;gap:5px;align-items:center;overflow-x:auto;padding:8px 0 9px;scrollbar-width:none}
 .filters::-webkit-scrollbar{display:none}
@@ -186,6 +193,7 @@ button{cursor:pointer}
 
 .detail-grid3{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding-bottom:8px}
 .detail-grid3 .field.full{grid-column:1/-1}
+.detail-grid3 > .field{min-width:0}
 
 .overlay{
   position:fixed;inset:0;background:rgba(26,28,30,.38);z-index:50;
@@ -411,9 +419,7 @@ button{cursor:pointer}
         <div class="kicker" style="margin:0">SOFTWARE LIST</div>
         <button id="rom-edit-toggle" class="rom-edit-toggle">編集</button>
       </div>
-      <div class="rom-list" id="rom-list">
-        <button class="rom active" data-rom-id="rom-diamond-default" data-rom="ダイヤモンド①" data-base="ダイヤモンド"><span><strong>ダイヤモンド①</strong><small>ダイヤモンド</small></span><span class="arrow">›</span></button>
-      </div>
+      <div class="rom-list" id="rom-list"></div>
       <button class="add" id="add-rom">＋ ソフトを追加</button>
     </section>
 
@@ -828,7 +834,7 @@ button{cursor:pointer}
     ` : '';
     return `
       <div class="dex-row">
-        <button class="cellbtn fav-lead off">☑️</button>
+        <button class="cellbtn fav-lead off">🩷</button>
         <span class="no">${no}</span><span class="pname">${name}</span>
         <button class="cellbtn status">➖</button>
         <button class="cellbtn off">☑️</button>
@@ -1211,6 +1217,7 @@ button{cursor:pointer}
       const favBtn = e.target.closest('.fav-lead');
       if(favBtn){
         favBtn.classList.toggle('off');
+        favBtn.textContent = '🩷';
         const item = favBtn.closest('.dex-item');
         item.dataset.favorite = favBtn.classList.contains('off') ? '0' : '1';
         saveDexStateDebounced();
@@ -1400,6 +1407,15 @@ button{cursor:pointer}
     romList.appendChild(btn);
     syncRomChips();
     saveRomListDebounced();
+    idbSet('everHadRom', true);
+    // 追加したソフトが唯一のROMだった場合、そのまま表示に切り替える
+    if($$('#rom-list .rom').length===1){
+      btn.classList.add('active');
+      currentRomId = btn.dataset.romId;
+      title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
+      const gameId = GAME_ID_MAP[base];
+      if(gameId) loadGameData(gameId);
+    }
     closeAddSheet();
     toast(name+' を追加しました');
   };
@@ -1755,10 +1771,35 @@ button{cursor:pointer}
       const gameId = GAME_ID_MAP[base] || 'diamond';
       await loadGameData(gameId);
     } else {
-      await loadGameData('diamond');
+      // ROMが1件も無い場合
+      const everHadRom = await idbGet('everHadRom');
+      if(!everHadRom){
+        // 一度もソフトを追加したことが無い(初回訪問とみなせる)場合はwelcome.htmlへ
+        location.href = 'welcome.html';
+        return;
+      }
+      // 過去に追加したが今は0件(全部削除した等)の場合は、案内表示のみ
+      showEmptyRomState();
     }
   }
   initApp();
+
+  // welcome.html経由(?openAdd=1)で来た場合は、ソフト追加シートを自動で開く
+  if(new URLSearchParams(location.search).get('openAdd')==='1'){
+    setTimeout(()=>{ $('#add-rom').click(); }, 300);
+    // URLを綺麗にしておく(再読み込み時に毎回開かないように)
+    history.replaceState(null, '', location.pathname);
+  }
+
+  function showEmptyRomState(){
+    title.textContent = 'ソフト未登録';
+    sideName.textContent = 'ソフト未登録';
+    $('#side-current-base').textContent = '―';
+    $('#regional-dex-container').innerHTML = '<div class="note" style="padding:20px 14px;line-height:1.8">まだソフトが登録されていません。左上の🔖からSOFTWARE LISTを開いて「＋ ソフトを追加」してください。</div>';
+    $('#dex-national').innerHTML = '';
+    const natCount = $('#national-count');
+    if(natCount) natCount.textContent = '';
+  }
 
   // ページ離脱・非表示時に即時保存(デバウンスを待たず確実に保存する)
   document.addEventListener('visibilitychange', ()=>{
