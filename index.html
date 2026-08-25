@@ -741,7 +741,7 @@ button{cursor:pointer}
         dlog('openDb: タイムアウト(5秒経過、onblocked等で応答なし)');
         dbPromise = null; // 次回リトライできるようにクリア
         reject(new Error('IndexedDB接続がタイムアウトしました'));
-      }, 5000);
+      }, 1500);
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = (e)=>{
         const db = e.target.result;
@@ -1832,9 +1832,19 @@ button{cursor:pointer}
   // 初期化: 保存済みのSOFTWARE LISTがあれば復元してから、表示中ROMの図鑑を読み込む
   async function initApp(){
     dlog('initApp開始');
-    const restored = await restoreRomList();
+    let restored = await restoreRomList();
+    let activeRomBtn = $('#rom-list .rom.active') || $('#rom-list .rom');
+    if(!activeRomBtn){
+      // ROMが見つからなかった場合、DB接続の一時的な問題(onblocked等)の可能性があるので、
+      // 少し待ってからもう一度だけ試す(dbPromiseをリセットしてやり直す)
+      dlog('initApp: 1回目でROM見つからず。再試行のため少し待機。');
+      await new Promise(r=>setTimeout(r, 400));
+      dbPromise = null;
+      restored = await restoreRomList();
+      activeRomBtn = $('#rom-list .rom.active') || $('#rom-list .rom');
+      dlog(`initApp: 再試行結果 activeRomBtn=${activeRomBtn ? activeRomBtn.dataset.rom : 'なし'}`);
+    }
     if(restored) syncRomChips();
-    const activeRomBtn = $('#rom-list .rom.active') || $('#rom-list .rom');
     dlog(`initApp: activeRomBtn=${activeRomBtn ? activeRomBtn.dataset.rom : 'なし'}`);
     if(activeRomBtn){
       currentRomId = activeRomBtn.dataset.romId;

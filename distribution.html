@@ -476,6 +476,7 @@ button,label{touch-action:manipulation}
       dlog('戻るリンククリック: 保存→DB切断→遷移');
       await saveState();
       await closeDbConnection();
+      await new Promise(r=>setTimeout(r, 150)); // DB切断が完全に反映されるのを少し待つ
       location.href = 'index.html';
     });
   }
