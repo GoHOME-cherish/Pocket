@@ -104,8 +104,6 @@ button,label{touch-action:manipulation}
   <span></span>
 </header>
 
-<div id="debug-log-panel" style="background:#fff3cd;border-bottom:2px solid #e0a800;padding:8px 10px;font-size:9px;font-family:monospace;max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.6"></div>
-
 <main class="main">
 
   <div class="note-box">💡 過去に公式から配布された特別なポケモンの一覧です。💌は「ふしぎなおくりもの」のカードデータを保存しているか、🤝は実際に受け取り済みかを記録できます。データは自動保存されます。</div>
@@ -137,26 +135,7 @@ button,label{touch-action:manipulation}
   const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 
   // ===== 一時的なデバッグログ(不具合調査用) =====
-  function dlog(msg){
-    try{
-      const key = 'gohome_debug_log';
-      const now = new Date().toLocaleTimeString('ja-JP', {hour12:false});
-      const line = `[${now}] [distribution] ${msg}`;
-      const prev = localStorage.getItem(key) || '';
-      const lines = (prev + '\n' + line).split('\n').slice(-40);
-      localStorage.setItem(key, lines.join('\n'));
-      const panel = document.getElementById('debug-log-panel');
-      if(panel) panel.textContent = lines.join('\n');
-    }catch(e){}
-  }
-  (function showSavedLog(){
-    try{
-      const saved = localStorage.getItem('gohome_debug_log');
-      const panel = document.getElementById('debug-log-panel');
-      if(saved && panel) panel.textContent = saved;
-    }catch(e){}
-  })();
-  dlog('distribution.html スクリプト開始');
+  function dlog(){ /* デバッグログ機構は削除済み(no-op) */ }
 
 
   // ===== IndexedDB (index.html/playthrough.htmlと共有) =====

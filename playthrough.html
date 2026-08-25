@@ -233,6 +233,7 @@ button,label{touch-action:manipulation}
 <script>
 (function(){
   const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+  function dlog(){ /* デバッグログ機構は削除済み(no-op) */ }
 
   // ===== IndexedDB (図鑑側 index.html と同じDBを共有) =====
   const DB_NAME = 'gohome_cherish_db';
