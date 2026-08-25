@@ -164,73 +164,147 @@ button,label{touch-action:manipulation}
   const DB_VERSION = 1;
   const STORE_NAME = 'kv';
   let dbPromise = null;
+  let dbInstance = null;
+
   function openDb(){
+    if(dbInstance) return Promise.resolve(dbInstance);
     if(dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject)=>{
-      if(!window.indexedDB){ reject(new Error('IndexedDB非対応のブラウザです')); return; }
+
+    const openingPromise = new Promise((resolve, reject)=>{
+      if(!window.indexedDB){
+        reject(new Error('IndexedDB非対応のブラウザです'));
+        return;
+      }
+
       let settled = false;
       const timeoutId = setTimeout(()=>{
         if(settled) return;
         settled = true;
-        dlog('openDb: タイムアウト(5秒経過)');
-        dbPromise = null;
+        dlog('openDb: タイムアウト(3000ms)。接続要求を待ち続けず失敗扱いにします。');
         reject(new Error('IndexedDB接続がタイムアウトしました'));
-      }, 5000);
+      }, 3000);
+
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = (e)=>{
         const db = e.target.result;
-        if(!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+        if(!db.objectStoreNames.contains(STORE_NAME)){
+          db.createObjectStore(STORE_NAME);
+        }
       };
       req.onsuccess = (e)=>{
-        if(settled) return;
+        const db = e.target.result;
+        // タイムアウト後に遅れて成功した接続は、幽霊接続として残さず即座に閉じる。
+        if(settled){
+          try{ db.close(); }catch(_){}
+          return;
+        }
         settled = true;
         clearTimeout(timeoutId);
-        resolve(e.target.result);
+        dbInstance = db;
+        db.onversionchange = ()=>{
+          dlog('IndexedDB versionchange受信 → 接続を閉じます');
+          try{ db.close(); }catch(_){}
+          if(dbInstance === db) dbInstance = null;
+          dbPromise = null;
+        };
+        resolve(db);
       };
       req.onerror = (e)=>{
         if(settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        dbPromise = null;
-        reject(e.target.error);
+        reject(e.target.error || new Error('IndexedDB open error'));
       };
       req.onblocked = ()=>{
-        dlog('openDb: onblocked発火。タイムアウト待ち。');
+        // blocked は通常の同一バージョン接続ではなく、versionchange が他接続に阻まれた時に起こる。
+        dlog('openDb: onblocked発火(versionchange待ち)。タイムアウトで復帰します。');
       };
     });
-    return dbPromise;
+
+    dbPromise = openingPromise;
+    openingPromise.catch(()=>{
+      if(dbPromise === openingPromise) dbPromise = null;
+    });
+    return openingPromise;
   }
-  async function closeDbConnection(){
-    try{
-      if(dbPromise){
-        const db = await dbPromise;
-        if(db && db.close) db.close();
+
+  // SafariでIDBTransactionが無反応のまま残っても、画面操作全体を永久停止させない。
+  function runIdbTransaction(db, mode, label, operation, timeoutMs=1800){
+    return new Promise((resolve, reject)=>{
+      let settled = false;
+      let tx = null;
+      let timer = null;
+
+      const finishOk = ()=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const finishError = (err)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err || 'IndexedDB transaction error')));
+      };
+
+      try{
+        tx = db.transaction(STORE_NAME, mode);
+        tx.oncomplete = finishOk;
+        tx.onerror = (e)=> finishError(tx.error || e.target.error || new Error(`IndexedDB transaction error: ${label}`));
+        tx.onabort = ()=> finishError(tx.error || new Error(`IndexedDB transaction aborted: ${label}`));
+        operation(tx.objectStore(STORE_NAME));
+        timer = setTimeout(()=>{
+          if(settled) return;
+          dlog(`IDB transaction timeout: ${label}`);
+          try{ tx.abort(); }catch(_){}
+          finishError(new Error(`IndexedDB transaction timeout: ${label}`));
+        }, timeoutMs);
+      }catch(err){
+        finishError(err);
       }
-    }catch(e){}
-    dbPromise = null;
+    });
   }
+
+  function closeDbConnection(){
+    const db = dbInstance;
+    dbInstance = null;
+    dbPromise = null;
+    if(db){
+      try{ db.close(); }catch(_){}
+    }
+  }
+
   async function idbSet(key, value){
     try{
       const db = await openDb();
-      return await new Promise((resolve, reject)=>{
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(value, key);
-        tx.oncomplete = ()=> resolve(true);
-        tx.onerror = (e)=> reject(e.target.error);
+      await runIdbTransaction(db, 'readwrite', `put:${key}`, (store)=>{
+        store.put(value, key);
       });
-    }catch(err){ console.error('idbSet失敗', key, err); return false; }
+      return true;
+    }catch(err){
+      console.error('idbSet失敗', key, err);
+      dlog(`idbSet失敗: key=${key} error=${err && err.message}`);
+      return false;
+    }
   }
+
   async function idbGet(key){
     try{
       const db = await openDb();
-      return await new Promise((resolve, reject)=>{
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(key);
-        req.onsuccess = ()=> resolve(req.result);
-        req.onerror = (e)=> reject(e.target.error);
+      let result;
+      await runIdbTransaction(db, 'readonly', `get:${key}`, (store)=>{
+        const req = store.get(key);
+        req.onsuccess = ()=>{ result = req.result; };
       });
-    }catch(err){ console.error('idbGet失敗', key, err); return undefined; }
+      return result;
+    }catch(err){
+      console.error('idbGet失敗', key, err);
+      dlog(`idbGet失敗: key=${key} error=${err && err.message}`);
+      return undefined;
+    }
   }
+
   function debounce(fn, wait){
     let timer=null;
     return (...args)=>{ clearTimeout(timer); timer=setTimeout(()=>fn(...args), wait); };
@@ -384,7 +458,9 @@ button,label{touch-action:manipulation}
   }
 
   async function saveState(){
-    await idbSet('distributionState', eventState);
+    const ok = await idbSet('distributionState', eventState);
+    dlog(`saveState完了: ok=${ok}`);
+    return ok;
   }
   const saveStateDebounced = debounce(saveState, 400);
 
@@ -458,26 +534,37 @@ button,label{touch-action:manipulation}
   dlog('loadEvents呼び出し直前');
   loadEvents();
 
-  document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='hidden'){
-      dlog('visibilitychange(hidden) → saveState');
-      saveState();
-    }
-  });
+  function settleWithin(promise, timeoutMs, label){
+    return Promise.race([
+      Promise.resolve(promise).then(value=>({status:'fulfilled', value}), error=>({status:'rejected', error})),
+      new Promise(resolve=>setTimeout(()=>resolve({status:'timeout'}), timeoutMs))
+    ]).then(result=>{
+      if(result.status==='timeout') dlog(`${label}: ${timeoutMs}msで待機打ち切り`);
+      else if(result.status==='rejected') dlog(`${label}: 例外 ${result.error && result.error.message}`);
+      return result;
+    });
+  }
+
   window.addEventListener('pagehide', ()=>{
-    dlog('pagehide → saveState');
-    saveState();
+    dlog('pagehide → 新規保存は開始せずDB接続のみ閉じる');
+    closeDbConnection();
   });
 
   const backLink = $('#back-to-index');
   if(backLink){
     backLink.addEventListener('click', async (e)=>{
       e.preventDefault();
-      dlog('戻るリンククリック: 保存→DB切断→遷移');
-      await saveState();
-      await closeDbConnection();
-      await new Promise(r=>setTimeout(r, 150)); // DB切断が完全に反映されるのを少し待つ
-      location.href = 'index.html';
+      if(backLink.dataset.navigating==='1') return;
+      backLink.dataset.navigating='1';
+      dlog('戻るリンククリック: 保存を試してから遷移');
+      const hardFallback = setTimeout(()=>{ location.href = 'index.html'; }, 1200);
+      try{
+        await settleWithin(saveState(), 900, 'saveState');
+      }finally{
+        clearTimeout(hardFallback);
+        dlog('戻るリンク: index.htmlへ遷移実行');
+        location.href = 'index.html';
+      }
     });
   }
 })();
