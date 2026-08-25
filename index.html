@@ -366,6 +366,18 @@ button{cursor:pointer}
 .dex-head .transfer-head{font-size:10px}
 .cellbtn.route-off{opacity:.25;filter:grayscale(1)}
 
+.empty-state{
+  text-align:center;padding:52px 20px 40px
+}
+.empty-state-icon{font-size:36px;margin-bottom:14px;opacity:.7}
+.empty-state-title{font-size:13.5px;font-weight:700;margin-bottom:7px}
+.empty-state-desc{font-size:10.5px;color:var(--muted);line-height:1.7;margin-bottom:20px}
+.empty-state-btn{
+  border:0;background:var(--accent);color:#fff;border-radius:10px;
+  padding:13px 22px;font-size:12.5px;font-weight:700
+}
+.empty-state-btn:active{opacity:.85}
+
 </style>
 </head>
 <body style="--flag-cols:6">
@@ -391,15 +403,15 @@ button{cursor:pointer}
 
     <section class="section">
       <div class="kicker">NOW OPEN</div>
-      <div class="current-name" id="side-current-name">ダイヤモンド①</div>
-      <div class="current-base" id="side-current-base">ダイヤモンド</div>
+      <div class="current-name" id="side-current-name">―</div>
+      <div class="current-base" id="side-current-base">―</div>
     </section>
 
     <details open>
       <summary>このソフトの情報</summary>
       <div class="drawer-body">
         <label class="field">表示名
-          <input id="side-display-name" value="ダイヤモンド①" maxlength="40">
+          <input id="side-display-name" value="" placeholder="―" maxlength="40">
         </label>
         <div class="grid2">
           <label class="field">主人公名<input placeholder="―"></label>
@@ -562,10 +574,10 @@ button{cursor:pointer}
   <main class="main">
     <section class="rom-head">
       <div class="rom-name-wrap">
-        <h1 class="rom-name" id="rom-title">ダイヤモンド①</h1>
+        <h1 class="rom-name" id="rom-title">―</h1>
         <button class="pencil" id="edit-title" aria-label="表示名を変更">✏️</button>
       </div>
-      <div class="counter"><b>0</b>/493種<br><b>0</b>匹 · 重複 <b>0</b></div>
+      <div class="counter" id="main-counter"><b>0</b>/0種<br><b>0</b>匹 · 重複 <b>0</b></div>
     </section>
 
     <div class="filters" id="quick-filters">
@@ -595,8 +607,8 @@ button{cursor:pointer}
   <div class="sheet-card">
     <div class="sheet-head"><strong>表示名</strong><button id="edit-close">×</button></div>
     <div class="sheet-body">
-      <label class="field">このソフトの表示名<input id="edit-name-input" value="ダイヤモンド①" maxlength="40"></label>
-      <div class="note" style="margin-top:7px">ダイヤモンド① / ダイヤモンド1️⃣ / ダイヤモンド🤍 / 周回用 / リセット済み など自由入力。</div>
+      <label class="field">このソフトの表示名<input id="edit-name-input" value="" placeholder="―" maxlength="40"></label>
+      <div class="note" style="margin-top:7px">例：ダイヤモンド① / ダイヤモンド1️⃣ / ダイヤモンド🤍 / 周回用 / リセット済み など自由入力。</div>
       <div class="actions"><button id="edit-cancel">やめる</button><button class="primary" id="edit-save">保存</button></div>
     </div>
   </div>
@@ -1771,15 +1783,15 @@ button{cursor:pointer}
       const gameId = GAME_ID_MAP[base] || 'diamond';
       await loadGameData(gameId);
     } else {
-      // ROMが1件も無い場合
+      // ROMが1件も無い場合、まず安全のため空状態の表示にしておく(リダイレクト失敗時の保険)
+      showEmptyRomState();
       const everHadRom = await idbGet('everHadRom');
       if(!everHadRom){
         // 一度もソフトを追加したことが無い(初回訪問とみなせる)場合はwelcome.htmlへ
         location.href = 'welcome.html';
         return;
       }
-      // 過去に追加したが今は0件(全部削除した等)の場合は、案内表示のみ
-      showEmptyRomState();
+      // 過去に追加したが今は0件(全部削除した等)の場合は、空状態表示のままでよい
     }
   }
   initApp();
@@ -1795,10 +1807,20 @@ button{cursor:pointer}
     title.textContent = 'ソフト未登録';
     sideName.textContent = 'ソフト未登録';
     $('#side-current-base').textContent = '―';
-    $('#regional-dex-container').innerHTML = '<div class="note" style="padding:20px 14px;line-height:1.8">まだソフトが登録されていません。左上の🔖からSOFTWARE LISTを開いて「＋ ソフトを追加」してください。</div>';
+    const counterEl = $('.counter');
+    if(counterEl) counterEl.innerHTML = '';
+    $('#regional-dex-container').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📔</div>
+        <div class="empty-state-title">まだソフトが登録されていません</div>
+        <div class="empty-state-desc">お手持ちのポケモンソフトを登録すると、ここに図鑑が表示されます。</div>
+        <button class="empty-state-btn" id="empty-state-add-btn">＋ ソフトを追加する</button>
+      </div>`;
     $('#dex-national').innerHTML = '';
     const natCount = $('#national-count');
     if(natCount) natCount.textContent = '';
+    const emptyBtn = $('#empty-state-add-btn');
+    if(emptyBtn) emptyBtn.addEventListener('click', ()=>{ $('#add-rom').click(); });
   }
 
   // ページ離脱・非表示時に即時保存(デバウンスを待たず確実に保存する)
