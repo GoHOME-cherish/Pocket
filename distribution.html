@@ -118,6 +118,10 @@ button,label{touch-action:manipulation}
 
   <div class="filter-chips" id="status-filter-chips">
     <button class="filter-chip on" data-status="all">すべて</button>
+    <button class="filter-chip" data-status="favorite">🩷 お気に入り</button>
+    <button class="filter-chip" data-status="owned">✅ 所持</button>
+    <button class="filter-chip" data-status="shiny">✨ 色違い</button>
+    <button class="filter-chip" data-status="home">🏠 HOME対象</button>
     <button class="filter-chip" data-status="received">🤝 受取済み</button>
     <button class="filter-chip" data-status="card">💌 カードあり</button>
   </div>
@@ -177,7 +181,7 @@ button,label{touch-action:manipulation}
   async function idbSet(key, value){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).put(value, key);
         tx.oncomplete = ()=> resolve(true);
@@ -188,7 +192,7 @@ button,label{touch-action:manipulation}
   async function idbGet(key){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readonly');
         const req = tx.objectStore(STORE_NAME).get(key);
         req.onsuccess = ()=> resolve(req.result);
@@ -278,6 +282,10 @@ button,label{touch-action:manipulation}
   function matchesFilters(e){
     if(currentGameFilter!=='all' && groupLabelFor(e.compatibleGames)!==currentGameFilter) return false;
     const st = eventState[e.eventId] || {};
+    if(currentStatusFilter==='favorite' && !st.favorite) return false;
+    if(currentStatusFilter==='owned' && !st.owned) return false;
+    if(currentStatusFilter==='shiny' && !st.shiny) return false;
+    if(currentStatusFilter==='home' && !st.home) return false;
     if(currentStatusFilter==='received' && !st.received) return false;
     if(currentStatusFilter==='card' && !st.hasCard) return false;
     if(searchQuery){
@@ -290,6 +298,10 @@ button,label{touch-action:manipulation}
 
   function renderList(){
     const listEl = $('#dist-list');
+    if(!allEvents.length){
+      listEl.innerHTML = '<div class="empty-note">配布データがまだ読み込まれていません。</div>';
+      return;
+    }
     const filtered = allEvents.filter(matchesFilters);
     $('#dist-count').textContent = `${filtered.length}件`;
     if(!filtered.length){
@@ -312,6 +324,10 @@ button,label{touch-action:manipulation}
           <div class="distGames">${groupLabel}｜${period}</div>
         </div>
         <div class="distIcons">
+          <button class="iconBtn fav-btn ${st.favorite?'':'off'}" title="お気に入り">🩷</button>
+          <button class="iconBtn status-btn ${st.owned?'':'off'}" title="所持">${st.owned?'✅':'➖'}</button>
+          <button class="iconBtn shiny-btn ${st.shiny?'':'off'}" title="色違い">✨</button>
+          <button class="iconBtn home-btn ${st.home?'':'off'}" title="HOME移送対象">🏠</button>
           <button class="iconBtn card-btn ${st.hasCard?'':'off'}" title="ふしぎなおくりものカードを保存しているか">💌</button>
           <button class="iconBtn received-btn ${st.received?'':'off'}" title="実際に受け取り済みか">🤝</button>
           <button class="expandBtn">👇</button>
@@ -346,6 +362,43 @@ button,label{touch-action:manipulation}
     if(!item) return;
     const eventId = item.dataset.eventId;
 
+    const favBtn = e.target.closest('.fav-btn');
+    if(favBtn){
+      const cur = eventState[eventId] || {};
+      cur.favorite = !cur.favorite;
+      eventState[eventId] = cur;
+      favBtn.classList.toggle('off', !cur.favorite);
+      saveStateDebounced();
+      return;
+    }
+    const statusBtn = e.target.closest('.status-btn');
+    if(statusBtn){
+      const cur = eventState[eventId] || {};
+      cur.owned = !cur.owned;
+      eventState[eventId] = cur;
+      statusBtn.classList.toggle('off', !cur.owned);
+      statusBtn.textContent = cur.owned ? '✅' : '➖';
+      saveStateDebounced();
+      return;
+    }
+    const shinyBtn = e.target.closest('.shiny-btn');
+    if(shinyBtn){
+      const cur = eventState[eventId] || {};
+      cur.shiny = !cur.shiny;
+      eventState[eventId] = cur;
+      shinyBtn.classList.toggle('off', !cur.shiny);
+      saveStateDebounced();
+      return;
+    }
+    const homeBtn = e.target.closest('.home-btn');
+    if(homeBtn){
+      const cur = eventState[eventId] || {};
+      cur.home = !cur.home;
+      eventState[eventId] = cur;
+      homeBtn.classList.toggle('off', !cur.home);
+      saveStateDebounced();
+      return;
+    }
     const cardBtn = e.target.closest('.card-btn');
     if(cardBtn){
       const cur = eventState[eventId] || {};

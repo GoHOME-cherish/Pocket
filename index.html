@@ -743,13 +743,16 @@ button{cursor:pointer}
       };
       req.onsuccess = (e)=> resolve(e.target.result);
       req.onerror = (e)=> reject(e.target.error);
+      req.onblocked = ()=>{
+        dlog('openDb: onblocked発火(他タブが接続を保持中の可能性)');
+      };
     });
     return dbPromise;
   }
   async function idbSet(key, value){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).put(value, key);
         tx.oncomplete = ()=> resolve(true);
@@ -757,27 +760,30 @@ button{cursor:pointer}
       });
     }catch(err){
       console.error('idbSet失敗', key, err);
+      dlog(`idbSet失敗: key=${key} error=${err && err.message}`);
       return false;
     }
   }
   async function idbGet(key){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readonly');
         const req = tx.objectStore(STORE_NAME).get(key);
         req.onsuccess = ()=> resolve(req.result);
         req.onerror = (e)=> reject(e.target.error);
+        tx.onerror = (e)=> reject(e.target.error);
       });
     }catch(err){
       console.error('idbGet失敗', key, err);
+      dlog(`idbGet失敗: key=${key} error=${err && err.message}`);
       return undefined;
     }
   }
   async function idbDelete(key){
     try{
       const db = await openDb();
-      return new Promise((resolve, reject)=>{
+      return await new Promise((resolve, reject)=>{
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).delete(key);
         tx.oncomplete = ()=> resolve(true);
@@ -1307,7 +1313,7 @@ button{cursor:pointer}
   $('#edit-title').addEventListener('click',()=>{editInput.value=title.textContent;sheet.classList.add('show');setTimeout(()=>{editInput.focus();editInput.select()},50)});
   function closeEdit(){sheet.classList.remove('show')}
   $('#edit-close').onclick=closeEdit; $('#edit-cancel').onclick=closeEdit;
-  $('#edit-save').onclick=()=>{
+  $('#edit-save').onclick=async ()=>{
     const v=editInput.value.trim()||'ダイヤモンド';
     title.textContent=v;sideName.textContent=v;sideInput.value=v;
     // SOFTWARE LIST側の表示名・チップも同期させる
@@ -1317,7 +1323,7 @@ button{cursor:pointer}
       const strongEl = activeRomBtn.querySelector('strong');
       if(strongEl) strongEl.textContent=v;
       syncRomChips();
-      saveRomListDebounced();
+      await saveRomList();
     }
     closeEdit();toast('表示名を変更しました')
   };
@@ -1335,15 +1341,16 @@ button{cursor:pointer}
   const MULTI_DEX_GAMES = new Set(['x','y']); // 複数地方図鑑を持つソフト
   let romEditing = false;
   const romList = $('#rom-list');
-  romList.addEventListener('click', e=>{
+  romList.addEventListener('click', async e=>{
     if(romEditing) return;
     const btn = e.target.closest('.rom');
     if(!btn) return;
-    saveDexState(); // 切り替え前の状態を保存
+    await saveDexState(); // 切り替え前の状態を保存(確実に完了させてから切り替える)
     $$('.rom').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
     const name=btn.dataset.rom, base=btn.dataset.base;
     currentRomId = btn.dataset.romId;
     title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
+    await saveRomList(); // どのROMがactiveかも確実に保存
     closeDrawers(); toast(name+' に切り替えました');
     const gameId = GAME_ID_MAP[base];
     if(gameId) loadGameData(gameId);
@@ -1387,7 +1394,7 @@ button{cursor:pointer}
       if(downBtn) downBtn.disabled = (idx===roms.length-1);
     });
   }
-  romList.addEventListener('click', e=>{
+  romList.addEventListener('click', async e=>{
     if(!romEditing) return;
     const upBtn = e.target.closest('.rom-up');
     const downBtn = e.target.closest('.rom-down');
@@ -1398,7 +1405,7 @@ button{cursor:pointer}
       if(prev) romList.insertBefore(btn, prev);
       updateRomEditButtonStates();
       syncRomChips();
-      saveRomListDebounced();
+      await saveRomList();
       return;
     }
     if(downBtn){
@@ -1407,7 +1414,7 @@ button{cursor:pointer}
       if(next) romList.insertBefore(next, btn);
       updateRomEditButtonStates();
       syncRomChips();
-      saveRomListDebounced();
+      await saveRomList();
       return;
     }
     if(delBtn){
@@ -1427,8 +1434,8 @@ button{cursor:pointer}
         btn.remove();
         updateRomEditButtonStates();
         syncRomChips();
-        saveRomListDebounced();
-        if(delRomId) idbDelete('dexState:'+delRomId); // 削除したROMの図鑑状態も破棄
+        await saveRomList();
+        if(delRomId) await idbDelete('dexState:'+delRomId); // 削除したROMの図鑑状態も破棄
         toast(romName+' を削除しました');
       }
     }
@@ -1439,7 +1446,7 @@ button{cursor:pointer}
     return 'rom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
   }
 
-  $('#add-rom-save').onclick=()=>{
+  $('#add-rom-save').onclick=async ()=>{
     const base=addBaseSelect.value;
     const name=addNameInput.value.trim()||base;
     const btn=document.createElement('button');
@@ -1449,8 +1456,8 @@ button{cursor:pointer}
     btn.innerHTML=romInnerHtml(name, base);
     romList.appendChild(btn);
     syncRomChips();
-    saveRomListDebounced();
-    idbSet('everHadRom', true);
+    await saveRomList(); // デバウンスせず即座に確実に保存する
+    await idbSet('everHadRom', true);
     // 追加したソフトが唯一のROMだった場合、そのまま表示に切り替える
     if($$('#rom-list .rom').length===1){
       btn.classList.add('active');
