@@ -142,6 +142,11 @@ button{cursor:pointer}
   font-size:8px;color:var(--faint)
 }
 .dex-head span:nth-child(n+4){text-align:center}
+/* 図鑑本体側の通常の見出し行は非表示にし、画面上部のスティッキー見出しだけを表示する */
+#regional-dex-container > .dex-head,
+.national-dex > .dex-head{
+  display:none;
+}
 .dex-row{
   min-height:48px;border-bottom:1px solid var(--line2);
 }
@@ -2341,8 +2346,10 @@ button{cursor:pointer}
   let refreshStickyDexHead = ()=>{};
   (function setupStickyDexHead(){
     const bar = $('#sticky-dex-head');
-    let lastY = window.scrollY;
     let hidden = false;
+    let anchorY = window.scrollY; // 「表示していた/隠していた」を切り替えた地点のY座標
+    const HIDE_THRESHOLD = 24; // この量だけ下にスクロールしたら隠す
+    const SHOW_THRESHOLD = 16; // この量だけ上にスクロールしたら出す
 
     function updateVisibility(){
       // 図鑑一覧が実際に画面内にある時だけ、この固定見出しを使う
@@ -2351,14 +2358,23 @@ button{cursor:pointer}
       bar.style.display='';
 
       const y = window.scrollY;
-      const delta = y - lastY;
-      // 一定量より強く下にスクロールしたら隠す。少しでも上に戻せばすぐ出す。
-      if(delta > 6 && y > 80){
-        if(!hidden){ bar.classList.add('hide'); hidden = true; }
-      } else if(delta < -4 || y <= 80){
+      if(y <= 80){
+        // 図鑑の先頭付近では常に表示する
         if(hidden){ bar.classList.remove('hide'); hidden = false; }
+        anchorY = y;
+        return;
       }
-      lastY = y;
+      if(!hidden && y - anchorY > HIDE_THRESHOLD){
+        bar.classList.add('hide'); hidden = true; anchorY = y;
+      } else if(hidden && anchorY - y > SHOW_THRESHOLD){
+        bar.classList.remove('hide'); hidden = false; anchorY = y;
+      } else if(!hidden){
+        // 表示中に上下し続けている間は基準点を更新し続け、後から急に隠れないようにする
+        if(y < anchorY) anchorY = y;
+      } else {
+        // 非表示中に、さらに下にスクロールしている間は基準点を更新し続ける
+        if(y > anchorY) anchorY = y;
+      }
     }
     window.addEventListener('scroll', updateVisibility, {passive:true});
     refreshStickyDexHead = updateVisibility;
