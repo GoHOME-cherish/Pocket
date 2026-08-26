@@ -64,6 +64,17 @@ button,label{touch-action:manipulation}
 
 /* ===== 配布図鑑アイテム(パターンC) ===== */
 .distItem{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden;background:var(--surface)}
+.distItem.highlight{
+  border-color:#8da7b6;
+  box-shadow:inset 3px 0 0 #8da7b6,0 0 0 1px #8da7b6;
+}
+.focusbar{
+  display:none;align-items:center;justify-content:space-between;
+  border-left:3px solid #8da7b6;background:var(--accent-soft);
+  margin:0 0 7px;padding:7px 9px;font-size:10px;color:#4e6877
+}
+.focusbar.show{display:flex}
+.focusbar button{border:0;background:transparent;color:inherit}
 .distRow{padding:10px 12px 2px}
 .distName{font-size:13.5px;font-weight:700}
 .distName .indiv-idx-badge{font-size:11px;color:var(--rose);font-weight:700;margin-left:2px}
@@ -141,6 +152,11 @@ button,label{touch-action:manipulation}
   opacity:0;pointer-events:none;transition:opacity .12s
 }
 .mini-scrollbar.dragging .mini-scrollbar-badge{opacity:1}
+.toast{
+  position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));z-index:100;transform:translateX(-50%);
+  background:#35383a;color:#fff;padding:8px 12px;border-radius:8px;font-size:10px;display:none
+}
+.toast.show{display:block}
 </style>
 </head>
 <body>
@@ -173,9 +189,13 @@ button,label{touch-action:manipulation}
 
   <div class="result-count" id="dist-count"></div>
 
+  <div class="focusbar" id="focusbar"><span id="focus-label">🔍 表示中</span><button id="clear-focus">×</button></div>
+
   <div id="dist-list"></div>
 
 </main>
+
+<div class="toast" id="toast"></div>
 
 <div id="mini-scrollbar" class="mini-scrollbar">
   <div class="mini-scrollbar-track"></div>
@@ -189,6 +209,9 @@ button,label{touch-action:manipulation}
 
   // ===== 一時的なデバッグログ(不具合調査用) =====
   function dlog(){ /* デバッグログ機構は削除済み(no-op) */ }
+
+  function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),1500)}
+  $('#clear-focus').onclick=()=>{$$('.distItem').forEach(x=>x.classList.remove('highlight'));$('#focusbar').classList.remove('show')};
 
 
   // ===== IndexedDB (index.html/playthrough.htmlと共有) =====
@@ -401,6 +424,35 @@ button,label{touch-action:manipulation}
     allRoms = (await idbGet('romList')) || [];
     buildGameFilterChips();
     renderList();
+    jumpToEventFromUrl();
+  }
+
+  // 横断検索(index.html)から eventId 付きで遷移してきた場合、該当の配布ポケモンを開いてハイライトする
+  function jumpToEventFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get('eventId');
+    if(!eventId) return;
+    const ev = allEvents.find(e=>e.eventId===eventId);
+    if(!ev){
+      toast('該当の配布ポケモンが見つかりませんでした');
+      return;
+    }
+    // フィルターで隠れていると探せないので、一旦「すべて」に戻してから対象を探す
+    currentGameFilter = 'all';
+    currentStatusFilter = 'all';
+    searchQuery = '';
+    $('#dist-search').value = '';
+    $$('#game-filter-chips .filter-chip').forEach(c=>c.classList.toggle('on', c.dataset.group==='all'));
+    $$('#status-filter-chips .filter-chip').forEach(c=>c.classList.toggle('on', c.dataset.status==='all'));
+    renderList();
+    const target = $(`.distItem[data-event-id="${eventId}"]`);
+    if(target){
+      target.classList.add('open');
+      target.classList.add('highlight');
+      $('#focus-label').textContent = '🔍 '+ev.nameJa+' を表示中';
+      $('#focusbar').classList.add('show');
+      setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}), 80);
+    }
   }
 
   function buildGameFilterChips(){

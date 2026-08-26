@@ -2344,12 +2344,12 @@ button{cursor:pointer}
     applyGlobal();
   }));
 
-  // 一覧の行をタップすると、対応するROMに切り替えて図鑑上でハイライト表示する(配布ポケモンはジャンプ非対応)
+  // 一覧の行をタップすると、対応するROMに切り替えて図鑑上でハイライト表示する(配布ポケモンはdistribution.htmlへジャンプ)
   globalResultsEl.addEventListener('click', async e=>{
     const r = e.target.closest('.result');
     if(!r) return;
     if(r.dataset.kind==='distribution'){
-      toast('配布図鑑ページから確認してください');
+      location.href = 'distribution.html?eventId=' + encodeURIComponent(r.dataset.hit);
       return;
     }
     const no=r.dataset.hit, rom=r.dataset.romname;
