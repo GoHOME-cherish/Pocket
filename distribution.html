@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f4f1">
 <title>配布図鑑 - GoHOME cherish</title>
 <style>
 :root{
   --bg:#f5f4f1;
+  --bg-rgb:245,244,241;
   --surface:#fbfaf7;
   --surface2:#efeeea;
   --text:#323437;
@@ -22,6 +24,22 @@
   --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic","Segoe UI",sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
+html[data-theme="dark"]{
+  --bg:#1c1d1f;
+  --bg-rgb:28,29,31;
+  --surface:#26282b;
+  --surface2:#2e3033;
+  --text:#eceded;
+  --muted:#a3a7ab;
+  --faint:#787c80;
+  --line:#3c3e41;
+  --line2:#333537;
+  --accent:#8fb2c7;
+  --accent-soft:#2c3a42;
+  --rose:#d99cab;
+  --rose-soft:#3a2c31;
+  --danger:#e08b7a;
+}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -31,7 +49,7 @@ button,label{touch-action:manipulation}
   position:sticky;top:0;z-index:30;height:52px;
   display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
   padding-top:env(safe-area-inset-top);
-  background:rgba(245,244,241,.96);backdrop-filter:blur(14px);
+  background:rgba(var(--bg-rgb),.96);backdrop-filter:blur(14px);
   border-bottom:1px solid var(--line);
 }
 .top-action{
@@ -91,6 +109,10 @@ button,label{touch-action:manipulation}
 .indiv-add-btn{
   flex:none;width:22px;height:32px;border:1px dashed var(--line);background:var(--surface2);
   border-radius:7px;font-size:11px;color:var(--accent);display:grid;place-items:center
+}
+.indiv-delete-btn{
+  flex:none;width:22px;height:32px;border:1px dashed var(--line);background:var(--surface2);
+  border-radius:7px;font-size:11px;color:var(--danger);display:grid;place-items:center
 }
 .iconBtn.off{opacity:.3;filter:grayscale(1)}
 .expandBtn{
@@ -209,6 +231,16 @@ button,label{touch-action:manipulation}
 
   // ===== 一時的なデバッグログ(不具合調査用) =====
   function dlog(){ /* デバッグログ機構は削除済み(no-op) */ }
+
+  // ユーザー入力・インポート由来の値をHTML文字列に埋め込む際に使う、最低限のエスケープ
+  function escapeHtml(v){
+    return String(v==null ? '' : v)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
 
   function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),1500)}
   $('#clear-focus').onclick=()=>{$$('.distItem').forEach(x=>x.classList.remove('highlight'));$('#focusbar').classList.remove('show')};
@@ -552,10 +584,11 @@ button,label{touch-action:manipulation}
         </div>`;
     return stArr.map((st, i)=>{
       const idxLabel = (i>0) ? `<span class="indiv-idx-badge">${toCircledNumber(i+1)}</span>` : '';
+      const deleteBtnHtml = (i>0) ? `<button class="indiv-delete-btn" title="この個体の枠を削除">🗑</button>` : '';
       const compatibleRoms = getCompatibleRoms(e.compatibleGames);
       const ownedRomIds = new Set(st.romIds || []);
       const romChipsHtml = compatibleRoms.length
-        ? compatibleRoms.map(rom=>`<button class="rom-chip ${ownedRomIds.has(rom.romId)?'on':''}" data-rom-id="${rom.romId}">${rom.name}</button>`).join('')
+        ? compatibleRoms.map(rom=>`<button class="rom-chip ${ownedRomIds.has(rom.romId)?'on':''}" data-rom-id="${escapeHtml(rom.romId)}">${escapeHtml(rom.name)}</button>`).join('')
         : `<span class="rom-chip-empty">対応ソフトが登録されていません</span>`;
       return `
       <div class="distItem" data-event-id="${e.eventId}" data-indiv-index="${i}">
@@ -573,6 +606,7 @@ button,label{touch-action:manipulation}
           <button class="iconBtn card-btn ${st.hasCard?'':'off'}" title="ふしぎなおくりものカードを保存しているか">💌</button>
           <button class="iconBtn received-btn ${st.received?'':'off'}" title="実際に受け取り済みか">🤝</button>
           <button class="indiv-add-btn" title="この配布ポケモンをもう1匹追加">+</button>
+          ${deleteBtnHtml}
           <button class="expandBtn">👇</button>
         </div>
         <div class="rom-chip-row">${romChipsHtml}</div>
@@ -680,6 +714,20 @@ button,label{touch-action:manipulation}
       eventState[eventId] = arr;
       saveStateDebounced();
       renderList(); // 個体数が変わったので該当種の行を再描画する
+      return;
+    }
+    const indivDeleteBtn = e.target.closest('.indiv-delete-btn');
+    if(indivDeleteBtn){
+      const arr = getEventStateArr(eventId);
+      if(indivIndex===0 || indivIndex>=arr.length) return; // ①番目は削除不可
+      const ev = allEvents.find(ev=>ev.eventId===eventId);
+      const label = toCircledNumber(indivIndex+1);
+      if(confirm(`${ev ? ev.nameJa : 'この個体'}${label} の枠を削除しますか？\nこの操作は取り消せません。`)){
+        arr.splice(indivIndex, 1);
+        eventState[eventId] = arr;
+        saveStateDebounced();
+        renderList(); // 個体数が変わったので該当種の行を再描画する
+      }
       return;
     }
     const romChip = e.target.closest('.rom-chip');
@@ -808,6 +856,12 @@ button,label{touch-action:manipulation}
     };
 
     updateThumb();
+  })();
+
+  // ===== テーマ復元 =====
+  (async ()=>{
+    const theme = await idbGet('theme');
+    if(theme) document.documentElement.setAttribute('data-theme', theme);
   })();
 
   loadEvents();

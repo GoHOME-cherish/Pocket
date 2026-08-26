@@ -17,6 +17,7 @@
   --bg:#f5f4f1;
   --bg-rgb:245,244,241;
   --surface:#fbfaf7;
+  --surface-rgb:251,250,247;
   --surface2:#efeeea;
   --text:#323437;
   --muted:#777b7f;
@@ -35,6 +36,7 @@ html[data-theme="dark"]{
   --bg:#1c1d1f;
   --bg-rgb:28,29,31;
   --surface:#26282b;
+  --surface-rgb:38,40,43;
   --surface2:#2e3033;
   --text:#eceded;
   --muted:#a3a7ab;
@@ -118,7 +120,7 @@ button{cursor:pointer}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field{display:grid;gap:4px;font-size:9px;color:var(--muted);min-width:0}
 .field input,.field select,.field textarea{
-  width:100%;max-width:100%;box-sizing:border-box;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 8px;font-size:11px;outline:none
+  width:100%;max-width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 8px;font-size:11px;outline:none
 }
 .field select{
   -webkit-appearance:none;appearance:none;
@@ -168,7 +170,7 @@ button{cursor:pointer}
 .cellbtn.status.absent{opacity:.45}
 .cellbtn:active{background:var(--surface2)}
 .dex-item.highlight{
-  background:linear-gradient(90deg,var(--accent-soft),rgba(232,239,243,.38) 72%,transparent);
+  background:linear-gradient(90deg,var(--accent-soft),var(--accent-soft) 72%,transparent);
   box-shadow:inset 3px 0 0 #8da7b6
 }
 .details{display:none;padding:7px 0 11px 38px;border-bottom:1px solid var(--line2)}
@@ -260,7 +262,7 @@ button{cursor:pointer}
 #right-toggle:checked~.app .right{transform:translateX(0)}
 #right-toggle:checked~.app .overlay{opacity:1;pointer-events:auto}
 .drawer-head{
-  position:sticky;top:0;z-index:2;background:rgba(251,250,247,.96);backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:2;background:rgba(var(--surface-rgb),.96);backdrop-filter:blur(12px);
   min-height:52px;padding:0 12px;display:flex;align-items:center;border-bottom:1px solid var(--line)
 }
 .drawer-head strong{font-family:var(--mono);font-size:10px;letter-spacing:.08em}
@@ -327,6 +329,11 @@ button{cursor:pointer}
 .gsearch-sub>summary::after{content:"⌄";float:right;color:var(--faint)}
 .gsearch-sub[open]>summary::after{content:"⌃"}
 .gsearch-sub-body{padding:2px 0 9px;display:grid;gap:8px}
+.gsearch-sub-ribbon>summary{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+}
+.gsearch-sub-ribbon>summary::after{float:none}
+.gsearch-sub-ribbon>summary .invert-toggle{margin-left:auto}
 .field-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .invert-toggle{
   border:1px solid var(--line);background:transparent;border-radius:10px;
@@ -637,8 +644,8 @@ button{cursor:pointer}
           </div>
         </details>
 
-        <details class="gsearch-sub">
-          <div class="field-head"><summary style="flex:1">リボン・証</summary><button class="invert-toggle" data-invert-for="ribbon" title="未取得で検索" style="margin:7px 0">⚠️</button></div>
+        <details class="gsearch-sub gsearch-sub-ribbon">
+          <summary>リボン・証<button class="invert-toggle" data-invert-for="ribbon" title="未取得で検索">⚠️</button></summary>
           <div class="gsearch-sub-body">
             <div class="chip-group" id="ribbon-search-chips">
               <button class="chip" data-ribbon="シンオウチャンプリボン">🎀 シンオウチャンプリボン</button>
@@ -1040,14 +1047,40 @@ button{cursor:pointer}
     }
   }
 
+  // 指定ROMに属する全データ(dexState/playthroughMemo/romMeta)と、
+  // distributionState内に残るromId参照をまとめて掃除する(ROM削除時に呼ぶ)
+  async function deleteRomData(romId){
+    if(!romId) return;
+    await idbDelete('dexState:'+romId);
+    await idbDelete('playthroughMemo:'+romId);
+    await idbDelete('romMeta:'+romId);
+
+    // 配布図鑑の各個体が持つromIds配列から、削除されたromIdの参照を取り除く
+    const distState = await idbGet('distributionState');
+    if(distState){
+      let changed = false;
+      Object.keys(distState).forEach(eventId=>{
+        let stArr = distState[eventId];
+        if(!stArr) return;
+        if(!Array.isArray(stArr)) stArr = [stArr];
+        stArr.forEach(st=>{
+          if(st && Array.isArray(st.romIds) && st.romIds.includes(romId)){
+            st.romIds = st.romIds.filter(id=>id!==romId);
+            changed = true;
+          }
+        });
+      });
+      if(changed) await idbSet('distributionState', distState);
+    }
+  }
+
   async function idbGetAllKeys(){
     try{
       const db = await openDb();
-      const keys = await new Promise((resolve, reject)=>{
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).getAllKeys();
-        req.onsuccess = ()=> resolve(req.result);
-        req.onerror = (e)=> reject(e.target.error);
+      let keys = [];
+      await runIdbTransaction(db, 'readonly', 'getAllKeys', (store)=>{
+        const req = store.getAllKeys();
+        req.onsuccess = ()=>{ keys = req.result; };
       });
       return keys;
     }catch(err){
@@ -1057,12 +1090,33 @@ button{cursor:pointer}
     }
   }
   // 短時間の連続呼び出しをまとめて1回の保存にする(高頻度なトグル操作対策)
+  // 短時間の連続呼び出しをまとめて1回の保存にする(高頻度なトグル操作対策)。
+  // cancel()で予約を破棄、flush()で予約中の呼び出しを今すぐ実行できる(ROM切替等、タイミングがずれると困る場面用)。
   function debounce(fn, wait){
     let timer=null;
-    return (...args)=>{
+    let pendingArgs=null;
+    const debounced = (...args)=>{
+      pendingArgs = args;
       clearTimeout(timer);
-      timer=setTimeout(()=>fn(...args), wait);
+      timer=setTimeout(()=>{
+        timer=null;
+        const a=pendingArgs; pendingArgs=null;
+        fn(...a);
+      }, wait);
     };
+    debounced.cancel = ()=>{
+      clearTimeout(timer);
+      timer=null;
+      pendingArgs=null;
+    };
+    debounced.flush = ()=>{
+      if(timer===null) return; // 予約なし
+      clearTimeout(timer);
+      timer=null;
+      const a=pendingArgs; pendingArgs=null;
+      return fn(...a);
+    };
+    return debounced;
   }
 
   // SOFTWARE LIST(ROM構成)の保存・復元
@@ -1092,7 +1146,7 @@ button{cursor:pointer}
     };
   }
   async function saveRomMeta(romId){
-    if(!romId) return;
+    if(!romId) return true; // 保存すべきROMが無い状態は失敗ではないためtrue扱い
     const els = romMetaFormEls();
     const meta = {
       trainerName: els.trainerName.value,
@@ -1102,13 +1156,14 @@ button{cursor:pointer}
       progress: els.progress.value,
       memo: els.memo.value
     };
-    await idbSet('romMeta:'+romId, meta);
+    return await idbSet('romMeta:'+romId, meta);
   }
   const saveRomMetaDebounced = debounce(saveRomMeta, 500);
 
   // 表示中ROMを切り替える直前に、フォームに入っている現在の内容を確実に保存する
   async function flushRomMeta(){
-    if(currentRomId) await saveRomMeta(currentRomId);
+    if(currentRomId) return await saveRomMeta(currentRomId);
+    return true;
   }
 
   // 指定ROMのromMetaを読み込んでフォームへ反映する(保存が無ければ空欄に戻す)
@@ -1379,22 +1434,31 @@ button{cursor:pointer}
   let currentRomId = null; // 表示中ROMのdata-rom-id
   const TRANSFER_COLS = true; // pre_BW世代: 🏹📤あり
 
+  let loadGameDataGeneration = 0; // 「最後に要求したROM以外のfetch結果は破棄する」ためのカウンタ
   async function loadGameData(gameId){
+    const myGeneration = ++loadGameDataGeneration;
     try{
       const res = await fetch(`data/${gameId}.json`);
       if(!res.ok) throw new Error('fetch failed: '+res.status);
-      currentDexData = await res.json();
+      const data = await res.json();
+      if(myGeneration !== loadGameDataGeneration){
+        dlog(`loadGameData: gameId=${gameId} は後続の呼び出しに追い越されたため破棄します`);
+        return; // 自分より後に開始された呼び出しがある場合、古い結果は画面に反映しない
+      }
+      currentDexData = data;
       renderDex();
       await restoreDexState();
     }catch(err){
+      if(myGeneration !== loadGameDataGeneration) return; // 追い越された後のエラー表示で画面を汚さない
       console.error('図鑑データの読み込みに失敗しました', err);
-      $('#dex').innerHTML = '<div class="note" style="padding:14px">図鑑データを読み込めませんでした。data/フォルダの設置状況をご確認ください。</div>';
+      // #dexはXY等の複数地方図鑑ソフトでは存在しないため、常に存在する#regional-dex-containerへ表示する
+      $('#regional-dex-container').innerHTML = '<div class="note" style="padding:14px">図鑑データを読み込めませんでした。data/フォルダの設置状況をご確認ください。</div>';
     }
   }
 
   // 現在表示中の全.dex-itemの状態を、現在のROM IDで保存する(同じNoの複数個体は配列で保持)
   async function saveDexState(){
-    if(!currentRomId) return;
+    if(!currentRomId) return true; // 保存すべきROMが無い状態は失敗ではないためtrue扱い
     const items = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const stateMap = {};
     // アンノーン等、同一種を大量に集める需要に対応しつつ、異常増殖を防ぐための安全上限
@@ -1418,11 +1482,22 @@ button{cursor:pointer}
     if(!stateMap) return;
     // 種ごとに、保存されている個体数ぶんの行をDOM上に用意してから状態を適用する
     const speciesWraps = $$('#regional-dex-container .dex-species, #dex-national .dex-species');
+    // 旧形式(noキーのみ)の救済は、そのnoから候補となる種が一意に決まる場合のみ行う。
+    // 地方図鑑と全国限定図鑑とで同じno文字列(例:"001")が重複するケースがあり、
+    // その場合に安易にstateMap[no]を読むと別の種のデータを取り違える恐れがあるため。
+    const noOccurrenceCount = {};
+    speciesWraps.forEach(speciesEl=>{
+      const no = speciesEl.dataset.no;
+      noOccurrenceCount[no] = (noOccurrenceCount[no]||0) + 1;
+    });
     speciesWraps.forEach(speciesEl=>{
       const no = speciesEl.dataset.no;
       const key = speciesEl.dataset.uniqueKey || no;
-      // uniqueKeyでの保存データを優先しつつ、旧バージョン(noキーのみ)で保存されたデータも救済的に読む
-      let states = stateMap[key] !== undefined ? stateMap[key] : stateMap[no];
+      // uniqueKeyでの保存データを優先。無い場合のみ、noが一意に決まる時に限り旧形式を救済的に読む。
+      let states = stateMap[key];
+      if(states===undefined && noOccurrenceCount[no]===1){
+        states = stateMap[no];
+      }
       if(!states) return;
       // 旧形式(単一オブジェクト)は配列に変換して扱う
       if(!Array.isArray(states)) states = [states];
@@ -1767,10 +1842,12 @@ button{cursor:pointer}
   const MULTI_DEX_GAMES = new Set(['x','y']); // 複数地方図鑑を持つソフト
   let romEditing = false;
   const romList = $('#rom-list');
-  romList.addEventListener('click', async e=>{
-    if(romEditing) return;
-    const btn = e.target.closest('.rom');
-    if(!btn) return;
+
+  // ROM切り替え本体。図鑑の再描画(loadGameData)まで確実に完了してからresolveする。
+  async function switchToRom(btn){
+    // 予約済みのデバウンス保存が後から誤発火して新ROM側に古い内容を書き込まないよう、先にキャンセルする
+    saveDexStateDebounced.cancel();
+    saveRomMetaDebounced.cancel();
     await saveDexState(); // 切り替え前の状態を保存(確実に完了させてから切り替える)
     await flushRomMeta(); // 切り替え前のromMetaも確実に保存する
     $$('.rom').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
@@ -1781,7 +1858,14 @@ button{cursor:pointer}
     await saveRomList(); // どのROMがactiveかも確実に保存
     closeDrawers(); toast(name+' に切り替えました');
     const gameId = GAME_ID_MAP[base];
-    if(gameId) loadGameData(gameId);
+    if(gameId) await loadGameData(gameId); // 図鑑の再描画完了まで必ず待つ(横断検索からのジャンプ等が後続処理の完了に依存するため)
+  }
+
+  romList.addEventListener('click', async e=>{
+    if(romEditing) return;
+    const btn = e.target.closest('.rom');
+    if(!btn) return;
+    await switchToRom(btn);
   });
 
   // ソフト追加
@@ -1863,7 +1947,7 @@ button{cursor:pointer}
         updateRomEditButtonStates();
         syncRomChips();
         await saveRomList();
-        if(delRomId) await idbDelete('dexState:'+delRomId); // 削除したROMの図鑑状態も破棄
+        if(delRomId) await deleteRomData(delRomId); // dexState/playthroughMemo/romMeta/配布図鑑内の参照をまとめて削除
         toast(romName+' を削除しました');
       }
     }
@@ -1893,7 +1977,7 @@ button{cursor:pointer}
       title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
       await loadRomMetaIntoForm(currentRomId); // 新規ROMなのでromMetaは空欄になる
       const gameId = GAME_ID_MAP[base];
-      if(gameId) loadGameData(gameId);
+      if(gameId) await loadGameData(gameId);
     }
     closeAddSheet();
     toast(name+' を追加しました');
@@ -2075,9 +2159,24 @@ button{cursor:pointer}
       const stateMap = (await idbGet('dexState:'+rom.romId)) || {};
       const region = REGION_OF_GAME[gameId] || null;
 
+      // 旧localNoキー救済の衝突防止:このROMの図鑑内でlocalNo文字列が重複する場合、曖昧な旧形式救済を行わない
+      // (図鑑復元側のrestoreDexState()と同じ考え方)
+      const localNoOccurrence = {};
       species.forEach(sp=>{
-        const key = String(sp.nationalNo);
-        let stArr = stateMap[key] || stateMap[String(sp.localNo)];
+        if(sp.localNo==null) return;
+        const k = String(sp.localNo);
+        localNoOccurrence[k] = (localNoOccurrence[k]||0) + 1;
+      });
+
+      species.forEach(sp=>{
+        const uniqueKey = 'nat-'+sp.nationalNo;
+        // 新形式(nat-xxx)を基本とし、見つからない場合のみ旧形式(nationalNo/localNo単体キー)を救済的に読む。
+        // ただしlocalNoは地方図鑑と全国限定図鑑で値が重複しうるため、一意に決まる場合のみ救済する。
+        let stArr = stateMap[uniqueKey];
+        if(stArr===undefined) stArr = stateMap[String(sp.nationalNo)];
+        if(stArr===undefined && sp.localNo!=null && localNoOccurrence[String(sp.localNo)]===1){
+          stArr = stateMap[String(sp.localNo)];
+        }
         if(!stArr) stArr = [null]; // 記録なし = 未所持1件として扱う
         if(!Array.isArray(stArr)) stArr = [stArr];
         stArr.forEach((st, idx)=>{
@@ -2090,6 +2189,7 @@ button{cursor:pointer}
             region,
             no: sp.localNo ?? null,
             nationalNo: sp.nationalNo,
+            uniqueKey,
             nameJa: sp.nameJa,
             indivIndex: idx,
             status: st ? (st.status||'absent') : 'absent',
@@ -2101,6 +2201,8 @@ button{cursor:pointer}
             otId: detail['ID'] || '',
             pokerus: detail['ポケルス'] || '',
             ball: detail['ボール'] || '',
+            nickname: detail['ニックネーム'] || '',
+            nature: detail['性格'] || '',
             ribbons: detail['リボン'] || []
           });
         });
@@ -2195,7 +2297,7 @@ button{cursor:pointer}
     // 保有ROM：配布ポケモンはROM横断のため、ROM絞り込み中は対象外にする
     if(adv.romFilter!=='all'){
       if(rec.kind==='distribution') return false;
-      if(rec.romName!==adv.romFilter) return false;
+      if(rec.romId!==adv.romFilter) return false;
     }
     // 個体情報
     if(adv.otName && !(rec.otName||'').includes(adv.otName)) return false;
@@ -2238,9 +2340,14 @@ button{cursor:pointer}
   function renderResultRow(rec){
     const sub = rec.kind==='distribution'
       ? `配布${rec.commonNameJa?'｜'+rec.commonNameJa:''}`
-      : `${rec.romName}｜No.${String(rec.no).padStart(3,'0')}`;
+      : (rec.no!=null
+          ? `${rec.romName}｜No.${String(rec.no).padStart(3,'0')}`
+          : `${rec.romName}｜全国No.${String(rec.nationalNo).padStart(3,'0')}`);
+    const hitAttr = rec.kind==='distribution'
+      ? `data-hit="${escapeHtml(rec.eventId)}"`
+      : `data-rom-id="${escapeHtml(rec.romId)}" data-unique-key="${escapeHtml(rec.uniqueKey)}"`;
     return `
-      <button class="result" data-kind="${rec.kind}" data-hit="${rec.kind==='distribution'?rec.eventId:rec.no}" data-romname="${escapeHtml(rec.romName||'')}">
+      <button class="result" data-kind="${rec.kind}" ${hitAttr}>
         <div class="result-main">
           <strong>${escapeHtml(rec.nameJa)}</strong>
           <span class="result-icons">${resultIconsHtml(rec)}</span>
@@ -2316,7 +2423,7 @@ button{cursor:pointer}
     $$('#rom-list .rom').forEach(romBtn=>{
       const chip=document.createElement('button');
       chip.className='chip';
-      chip.dataset.romFilter=romBtn.dataset.rom;
+      chip.dataset.romFilter=romBtn.dataset.romId; // 同名ROMが複数あっても区別できるようromIdで絞り込む
       chip.textContent=romBtn.dataset.rom;
       chipsWrap.appendChild(chip);
     });
@@ -2332,7 +2439,9 @@ button{cursor:pointer}
   $('#search-ot-name').addEventListener('input', applyGlobal);
   $('#search-ot-id').addEventListener('input', applyGlobal);
 
-  $$('.invert-toggle').forEach(btn=>btn.addEventListener('click',()=>{
+  $$('.invert-toggle').forEach(btn=>btn.addEventListener('click',e=>{
+    e.preventDefault(); // summary内に置かれている場合、<details>の開閉が誤発火しないようにする
+    e.stopPropagation();
     btn.classList.toggle('on');
     const target=btn.dataset.invertFor;
     if(target==='ribbon'){
@@ -2345,6 +2454,7 @@ button{cursor:pointer}
   }));
 
   // 一覧の行をタップすると、対応するROMに切り替えて図鑑上でハイライト表示する(配布ポケモンはdistribution.htmlへジャンプ)
+  let jumpInProgress = false;
   globalResultsEl.addEventListener('click', async e=>{
     const r = e.target.closest('.result');
     if(!r) return;
@@ -2352,24 +2462,29 @@ button{cursor:pointer}
       location.href = 'distribution.html?eventId=' + encodeURIComponent(r.dataset.hit);
       return;
     }
-    const no=r.dataset.hit, rom=r.dataset.romname;
-    // 対象ROMがすでに表示中でなければ、そのROMに切り替える
-    const targetBtn = $$('#rom-list .rom').find(b=>b.dataset.rom===rom);
-    if(targetBtn && !targetBtn.classList.contains('active')){
-      targetBtn.click();
-      await new Promise(res=>setTimeout(res, 300)); // ROM切り替え(図鑑再描画)を待つ
-    }
-    closeDrawers();
-    $$('.dex-item').forEach(x=>x.classList.remove('highlight'));
-    const target=$('.dex-item[data-no="'+String(no).padStart(3,'0')+'"]');
-    if(target){
-      const natDex=target.closest('.national-dex');
-      if(natDex) natDex.open=true;
-      target.style.display='';
-      target.classList.add('highlight');
-      $('#focus-label').textContent='🔍 '+target.dataset.name+' を表示中';
-      $('#focusbar').classList.add('show');
-      setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}),50);
+    if(jumpInProgress) return; // 前のジャンプ処理が完了するまで、次のタップは受け付けない
+    jumpInProgress = true;
+    try{
+      const romId = r.dataset.romId, uniqueKey = r.dataset.uniqueKey;
+      // 対象ROMがすでに表示中でなければ、そのROMに切り替える(図鑑の再描画完了まで確実に待つ)。romId基準にすることで同名ROMが複数あっても取り違えない。
+      const targetBtn = $$('#rom-list .rom').find(b=>b.dataset.romId===romId);
+      if(targetBtn && !targetBtn.classList.contains('active')){
+        await switchToRom(targetBtn);
+      }
+      closeDrawers();
+      $$('.dex-item').forEach(x=>x.classList.remove('highlight'));
+      const target=$(`.dex-item[data-unique-key="${uniqueKey}"]`);
+      if(target){
+        const natDex=target.closest('.national-dex');
+        if(natDex) natDex.open=true;
+        target.style.display='';
+        target.classList.add('highlight');
+        $('#focus-label').textContent='🔍 '+target.dataset.name+' を表示中';
+        $('#focusbar').classList.add('show');
+        setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}),50);
+      }
+    } finally {
+      jumpInProgress = false;
     }
   });
   $('#clear-focus').onclick=()=>{$$('.dex-item').forEach(x=>x.classList.remove('highlight'));$('#focusbar').classList.remove('show')};
@@ -2445,11 +2560,8 @@ button{cursor:pointer}
     if(!confirm('最終確認です。全てのソフト・図鑑データ・周回メモ・配布図鑑の記録を消去します。よろしいですか？')) return;
     try{
       const db = await openDb();
-      await new Promise((resolve, reject)=>{
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).clear();
-        tx.oncomplete = ()=> resolve();
-        tx.onerror = (e)=> reject(e.target.error);
+      await runIdbTransaction(db, 'readwrite', 'clearAll', (store)=>{
+        store.clear();
       });
       toast('初期化しました。ページを再読み込みします…');
       setTimeout(()=>location.reload(), 1200);
@@ -2461,30 +2573,44 @@ button{cursor:pointer}
 
   // IndexedDB上の全キーを列挙して、GoHOME cherish関連のデータを1つにまとめる
   async function collectAllData(){
-    await saveDexState(); // 書き出し直前に、現在表示中ROMの最新状態を確実に保存しておく(キー列挙より必ず先に行う)
+    // 書き出し直前の保存が失敗すると、古い内容のままJSONを書き出してしまうため、ここも厳格に扱う
+    const dexOk = await saveDexState(); // 書き出し直前に、現在表示中ROMの最新状態を確実に保存しておく(キー列挙より必ず先に行う)
+    if(dexOk===false){
+      throw new Error('書き出し直前のdexState保存に失敗しました');
+    }
+    const romMetaOk = await flushRomMeta(); // romMetaも同様に、書き出し直前の最新入力内容を確実に保存しておく
+    if(romMetaOk===false){
+      throw new Error('書き出し直前のromMeta保存に失敗しました');
+    }
     const keys = await idbGetAllKeys();
     const romList = (await idbGet('romList')) || [];
     const dexStates = {};
     const playthroughMemos = {};
+    const romMetas = {};
     for(const key of keys){
       if(key.startsWith('dexState:')){
         dexStates[key.slice('dexState:'.length)] = await idbGet(key);
       } else if(key.startsWith('playthroughMemo:')){
         playthroughMemos[key.slice('playthroughMemo:'.length)] = await idbGet(key);
+      } else if(key.startsWith('romMeta:')){
+        romMetas[key.slice('romMeta:'.length)] = await idbGet(key);
       }
     }
-    // 配布図鑑・タスクも「完全バックアップ」の対象に含める(存在しない場合はundefinedのまま保持しない)
+    // 配布図鑑・タスク・テーマも「完全バックアップ」の対象に含める(存在しない場合はundefinedのまま保持しない)
     const distributionState = (await idbGet('distributionState')) || null;
     const taskState = (await idbGet('taskState')) || null;
+    const theme = (await idbGet('theme')) || null;
     return {
       app: 'GoHOME cherish',
       exportedAt: new Date().toISOString(),
-      version: 3,
+      version: 4,
       romList,
       dexStates,
       playthroughMemos,
+      romMetas,
       distributionState,
-      taskState
+      taskState,
+      theme
     };
   }
 
@@ -2559,9 +2685,9 @@ button{cursor:pointer}
       lines.push('');
       lines.push('| 項目 | 値 |');
       lines.push('| --- | --- |');
-      lines.push(`| 所持数 | ${ownedCount} / ${entries.length}種 |`);
-      lines.push(`| 色違い登録数 | ${shinyCount}種 |`);
-      lines.push(`| HOME対象登録数 | ${homeCount}種 |`);
+      lines.push(`| 所持数 | ${ownedCount} / ${entries.length}匹 |`);
+      lines.push(`| 色違い登録数 | ${shinyCount}匹 |`);
+      lines.push(`| HOME対象登録数 | ${homeCount}匹 |`);
       const memo = data.playthroughMemos[rom.romId];
       if(memo){
         lines.push(`| リセット済み | ${memo.reset ? 'はい' : 'いいえ'} |`);
@@ -2590,32 +2716,30 @@ button{cursor:pointer}
     if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
     return s;
   }
-  function buildCsvExport(data){
-    const header = ['ソフト表示名','作品','図鑑No','状態','お気に入り','色違い','HOME対象','BWへ移送','ポケムーバー通過','ニックネーム','性格','ボール'];
+  async function buildCsvExport(){
+    const header = ['種別','ソフト表示名','作品','全国No','地方No','ポケモン名','個体番号','所持','お気に入り','色違い','HOME対象','BWへ移送','ポケムーバー通過','ニックネーム','性格','ボール'];
     const rows = [header];
-    data.romList.forEach(rom=>{
-      const state = data.dexStates[rom.romId] || {};
-      Object.keys(state).forEach(no=>{
-        let stArr = state[no];
-        if(!stArr) return;
-        if(!Array.isArray(stArr)) stArr = [stArr]; // 旧形式(単一オブジェクト)の救済
-        stArr.forEach(st=>{
-          if(!st) return;
-          const detail = st.detailGroup || {};
-          rows.push([
-            rom.name, rom.base, no,
-            st.status==='owned' ? '所持' : '未所持',
-            st.favorite==='1' ? '1' : '0',
-            st.shiny==='1' ? '1' : '0',
-            st.home==='1' ? '1' : '0',
-            st.transfers && st.transfers['🏹'] ? '1' : '0',
-            st.transfers && st.transfers['📤'] ? '1' : '0',
-            detail['ニックネーム'] || '',
-            detail['性格'] || '',
-            detail['ボール'] || ''
-          ]);
-        });
-      });
+    const records = await collectAllRecords();
+    records.forEach(rec=>{
+      const isDist = rec.kind==='distribution';
+      rows.push([
+        isDist ? '配布' : '通常図鑑',
+        isDist ? '' : (rec.romName||''),
+        isDist ? (rec.compatibleGames||[]).join('/') : (rec.romBase||''),
+        isDist ? '' : String(rec.nationalNo).padStart(3,'0'),
+        (!isDist && rec.no!=null) ? String(rec.no).padStart(3,'0') : '',
+        rec.nameJa,
+        (rec.indivIndex||0)+1,
+        rec.status==='owned' ? '所持' : '未所持',
+        rec.favorite ? '1' : '0',
+        rec.shiny ? '1' : '0',
+        rec.home ? '1' : '0',
+        (isDist ? rec.shifter : (rec.transfers&&rec.transfers['🏹'])) ? '1' : '0',
+        (isDist ? rec.mover : (rec.transfers&&rec.transfers['📤'])) ? '1' : '0',
+        isDist ? '' : (rec.nickname||''),
+        isDist ? '' : (rec.nature||''),
+        rec.ball||''
+      ]);
     });
     // Excel等での文字化け対策としてUTF-8 BOMを付与
     return '\uFEFF' + rows.map(r=>r.map(csvEscape).join(',')).join('\n');
@@ -2626,16 +2750,21 @@ button{cursor:pointer}
       const format = btn.dataset.format;
       toast('書き出し中…');
       try{
-        const data = await collectAllData();
         const stamp = dateStamp();
-        if(format==='json'){
-          downloadFile(`GoHOME_cherish_backup_${stamp}.json`, buildJsonExport(data), 'application/json');
-        } else if(format==='txt'){
-          downloadFile(`GoHOME_cherish_summary_${stamp}.txt`, buildTxtExport(data), 'text/plain');
-        } else if(format==='md'){
-          downloadFile(`GoHOME_cherish_report_${stamp}.md`, buildMdExport(data), 'text/markdown');
-        } else if(format==='csv'){
-          downloadFile(`GoHOME_cherish_list_${stamp}.csv`, buildCsvExport(data), 'text/csv');
+        if(format==='csv'){
+          // CSVは横断検索と同じ全件データ(collectAllRecords)を使うため、事前に最新状態を保存しておく
+          const dexOk = await saveDexState();
+          if(dexOk===false) throw new Error('書き出し直前のdexState保存に失敗しました');
+          downloadFile(`GoHOME_cherish_list_${stamp}.csv`, await buildCsvExport(), 'text/csv');
+        } else {
+          const data = await collectAllData();
+          if(format==='json'){
+            downloadFile(`GoHOME_cherish_backup_${stamp}.json`, buildJsonExport(data), 'application/json');
+          } else if(format==='txt'){
+            downloadFile(`GoHOME_cherish_summary_${stamp}.txt`, buildTxtExport(data), 'text/plain');
+          } else if(format==='md'){
+            downloadFile(`GoHOME_cherish_report_${stamp}.md`, buildMdExport(data), 'text/markdown');
+          }
         }
         toast(format.toUpperCase()+'を書き出しました');
       }catch(err){
@@ -2666,26 +2795,49 @@ button{cursor:pointer}
         return;
       }
       // 2. アプリが保存し得る既存キーを全て削除してから復元する(古いROMの孤児データを残さない)
+      // バックアップ関連は重要処理のため、通常操作と異なりidbSet/idbDeleteの失敗を厳格に扱う(黙って処理を続けない)
       const existingKeys = await idbGetAllKeys();
       for(const key of existingKeys){
-        if(key==='romList' || key==='distributionState' || key==='taskState'
-          || key.startsWith('dexState:') || key.startsWith('playthroughMemo:')){
-          await idbDelete(key);
+        if(key==='romList' || key==='distributionState' || key==='taskState' || key==='theme'
+          || key.startsWith('dexState:') || key.startsWith('playthroughMemo:') || key.startsWith('romMeta:')){
+          if(!(await idbDelete(key))){
+            throw new Error('既存データの削除に失敗しました: '+key);
+          }
         }
       }
       // 3. バックアップの全項目を復元する
-      await idbSet('romList', data.romList);
+      if(!(await idbSet('romList', data.romList))){
+        throw new Error('romListの復元に失敗しました');
+      }
       for(const romId in (data.dexStates||{})){
-        await idbSet('dexState:'+romId, data.dexStates[romId]);
+        if(!(await idbSet('dexState:'+romId, data.dexStates[romId]))){
+          throw new Error('dexStateの復元に失敗しました: '+romId);
+        }
       }
       for(const romId in (data.playthroughMemos||{})){
-        await idbSet('playthroughMemo:'+romId, data.playthroughMemos[romId]);
+        if(!(await idbSet('playthroughMemo:'+romId, data.playthroughMemos[romId]))){
+          throw new Error('playthroughMemoの復元に失敗しました: '+romId);
+        }
+      }
+      for(const romId in (data.romMetas||{})){
+        if(!(await idbSet('romMeta:'+romId, data.romMetas[romId]))){
+          throw new Error('romMetaの復元に失敗しました: '+romId);
+        }
       }
       if(data.distributionState){
-        await idbSet('distributionState', data.distributionState);
+        if(!(await idbSet('distributionState', data.distributionState))){
+          throw new Error('distributionStateの復元に失敗しました');
+        }
       }
       if(data.taskState){
-        await idbSet('taskState', data.taskState);
+        if(!(await idbSet('taskState', data.taskState))){
+          throw new Error('taskStateの復元に失敗しました');
+        }
+      }
+      if(data.theme){
+        if(!(await idbSet('theme', data.theme))){
+          throw new Error('themeの復元に失敗しました');
+        }
       }
       toast('読み込みました。ページを再読み込みします…');
       setTimeout(()=>location.reload(), 1200);

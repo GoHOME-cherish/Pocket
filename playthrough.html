@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f4f1">
 <title>周回メモ - GoHOME cherish</title>
 <style>
 :root{
   --bg:#f5f4f1;
+  --bg-rgb:245,244,241;
   --surface:#fbfaf7;
   --surface2:#efeeea;
   --text:#323437;
@@ -22,6 +24,22 @@
   --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic","Segoe UI",sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
+html[data-theme="dark"]{
+  --bg:#1c1d1f;
+  --bg-rgb:28,29,31;
+  --surface:#26282b;
+  --surface2:#2e3033;
+  --text:#eceded;
+  --muted:#a3a7ab;
+  --faint:#787c80;
+  --line:#3c3e41;
+  --line2:#333537;
+  --accent:#8fb2c7;
+  --accent-soft:#2c3a42;
+  --rose:#d99cab;
+  --rose-soft:#3a2c31;
+  --danger:#e08b7a;
+}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -31,7 +49,7 @@ button,label{touch-action:manipulation}
   position:sticky;top:0;z-index:30;height:52px;
   display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
   padding-top:env(safe-area-inset-top);
-  background:rgba(245,244,241,.96);backdrop-filter:blur(14px);
+  background:rgba(var(--bg-rgb),.96);backdrop-filter:blur(14px);
   border-bottom:1px solid var(--line);
 }
 .top-action{
@@ -381,9 +399,33 @@ button,label{touch-action:manipulation}
     }
   }
 
+  // 短時間の連続呼び出しをまとめて1回の保存にする(高頻度なトグル操作対策)。
+  // cancel()で予約を破棄、flush()で予約中の呼び出しを今すぐ実行できる(ROM切替等、タイミングがずれると困る場面用)。
   function debounce(fn, wait){
     let timer=null;
-    return (...args)=>{ clearTimeout(timer); timer=setTimeout(()=>fn(...args), wait); };
+    let pendingArgs=null;
+    const debounced = (...args)=>{
+      pendingArgs = args;
+      clearTimeout(timer);
+      timer=setTimeout(()=>{
+        timer=null;
+        const a=pendingArgs; pendingArgs=null;
+        fn(...a);
+      }, wait);
+    };
+    debounced.cancel = ()=>{
+      clearTimeout(timer);
+      timer=null;
+      pendingArgs=null;
+    };
+    debounced.flush = ()=>{
+      if(timer===null) return;
+      clearTimeout(timer);
+      timer=null;
+      const a=pendingArgs; pendingArgs=null;
+      return fn(...a);
+    };
+    return debounced;
   }
 
   // ===== ROM選択プルダウンを、図鑑側で保存されたSOFTWARE LISTから復元 =====
@@ -441,17 +483,17 @@ button,label{touch-action:manipulation}
     };
   }
 
+  // stateがnull(保存データが無いROMへの切り替え等)の場合は、直前の入力内容を残さないよう明示的に空状態を適用する
   function applyMemoState(state){
-    if(!state) return;
-    $('#pt-reset-toggle').classList.toggle('on', !!state.reset);
-    $('#pt-free-memo').value = state.freeMemo || '';
-    $('.pt-target-list textarea').value = state.targets || '';
-    $('#pt-money').value = state.money || '';
+    $('#pt-reset-toggle').classList.toggle('on', !!(state && state.reset));
+    $('#pt-free-memo').value = (state && state.freeMemo) || '';
+    $('.pt-target-list textarea').value = (state && state.targets) || '';
+    $('#pt-money').value = (state && state.money) || '';
 
-    // 色違いカウンター: 保存件数ぶん行を作ってから値を入れる
+    // 色違いカウンター: 保存件数ぶん行を作ってから値を入れる(未保存時は空の1行にする)
     const shinyListEl = $('#pt-shiny-list');
     shinyListEl.innerHTML = '';
-    const shinyData = (state.shinyCounters && state.shinyCounters.length) ? state.shinyCounters : [{name:'',count:0}];
+    const shinyData = (state && state.shinyCounters && state.shinyCounters.length) ? state.shinyCounters : [{name:'',count:0}];
     shinyData.forEach(s=>{
       const row = createShinyRow();
       row.querySelector('input[type="text"]').value = s.name || '';
@@ -459,10 +501,10 @@ button,label{touch-action:manipulation}
       shinyListEl.appendChild(row);
     });
 
-    // 持ち物メモ: 同様に復元
+    // 持ち物メモ: 同様に復元(未保存時は空の1行にする)
     const itemListEl = $('#pt-item-list');
     itemListEl.innerHTML = '';
-    const itemData = (state.items && state.items.length) ? state.items : [{category:'ball',name:'',qty:''}];
+    const itemData = (state && state.items && state.items.length) ? state.items : [{category:'ball',name:'',qty:''}];
     itemData.forEach(it=>{
       const row = createItemRow();
       row.querySelector('select').value = it.category || 'ball';
@@ -590,6 +632,9 @@ button,label{touch-action:manipulation}
 
   // ===== ROM切り替え =====
   romSelect.addEventListener('change', async ()=>{
+    // 予約済みのデバウンス保存が後から誤発火して新ROM側に古い内容を書き込まないよう、先にキャンセルする
+    saveMemoStateDebounced.cancel();
+    saveItemsAndRecalc.cancel();
     await saveMemoState(); // 切り替え前の状態を保存(切替前IDのまま呼ぶ必要があるため先にawaitで確定させる)
     currentRomId = romSelect.value;
     await loadMemoState();
@@ -673,6 +718,12 @@ button,label{touch-action:manipulation}
     await renderCrossTotal();
   }
   initApp();
+
+  // ===== テーマ復元 =====
+  (async ()=>{
+    const theme = await idbGet('theme');
+    if(theme) document.documentElement.setAttribute('data-theme', theme);
+  })();
 
   function settleWithin(promise, timeoutMs){
     return Promise.race([
