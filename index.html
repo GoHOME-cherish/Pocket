@@ -15,6 +15,7 @@
 <style>
 :root{
   --bg:#f5f4f1;
+  --bg-rgb:245,244,241;
   --surface:#fbfaf7;
   --surface2:#efeeea;
   --text:#323437;
@@ -32,6 +33,7 @@
 }
 html[data-theme="dark"]{
   --bg:#1c1d1f;
+  --bg-rgb:28,29,31;
   --surface:#26282b;
   --surface2:#2e3033;
   --text:#eceded;
@@ -56,7 +58,7 @@ button{cursor:pointer}
   position:sticky;top:0;z-index:30;height:52px;
   display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
   padding-top:env(safe-area-inset-top);
-  background:rgba(245,244,241,.96);backdrop-filter:blur(14px);
+  background:rgba(var(--bg-rgb),.96);backdrop-filter:blur(14px);
   border-bottom:1px solid var(--line);
 }
 .top-action{
@@ -73,7 +75,7 @@ button{cursor:pointer}
   position:sticky;
   top:calc(52px + env(safe-area-inset-top));
   z-index:29;
-  background:rgba(245,244,241,.97);backdrop-filter:blur(14px);
+  background:rgba(var(--bg-rgb),.97);backdrop-filter:blur(14px);
   border-bottom:1px solid var(--line);
   max-width:760px;margin:0 auto;padding:0 16px;
   max-height:44px;overflow:hidden;
@@ -1217,12 +1219,11 @@ button{cursor:pointer}
     });
     const detailsEl = item.querySelector('.details');
     if(detailsEl){
-      state.individuals = [];
-      detailsEl.querySelectorAll('.indiv-group').forEach(g=>{
-        state.individuals.push(extractIndivGroupState(g));
-      });
-      const activeTab = detailsEl.querySelector('.individual.active');
-      state.activeIndiv = activeTab ? activeTab.dataset.indiv : '1';
+      // 1個体=1つの詳細情報(indiv-group)のみを保存する(旧・複数タブ形式は使わない)
+      const group = detailsEl.querySelector('.indiv-group');
+      if(group){
+        state.detailGroup = extractIndivGroupState(group);
+      }
     }
     return state;
   }
@@ -1278,20 +1279,13 @@ button{cursor:pointer}
       btn.classList.toggle('route-off', !on);
       btn.textContent = on ? btn.dataset.icon : '☑️';
     });
-    // 個体詳細は、状態があれば詳細フォームを事前に構築して復元する
-    if(state.individuals && state.individuals.length){
+    // 個体詳細は、状態があれば詳細フォームを事前に構築して復元する(1個体=1つのdetailGroupのみ)
+    if(state.detailGroup){
       const slot = item.querySelector('.details-slot');
       if(slot.children.length===0){ slot.innerHTML = detailsHtml(parseInt(item.dataset.indivIndex,10)||1); }
       const detailsEl = item.querySelector('.details');
-      // 2体目以降が保存されている場合はタブを追加生成
-      while(detailsEl.querySelectorAll('.indiv-group').length < state.individuals.length){
-        addIndividual(detailsEl);
-      }
-      const groups = detailsEl.querySelectorAll('.indiv-group');
-      state.individuals.forEach((indivState, i)=>{
-        if(groups[i]) applyIndivGroupState(groups[i], indivState);
-      });
-      if(state.activeIndiv) switchIndividual(detailsEl, state.activeIndiv);
+      const group = detailsEl.querySelector('.indiv-group');
+      if(group) applyIndivGroupState(group, state.detailGroup);
     }
   }
 
@@ -1569,18 +1563,6 @@ button{cursor:pointer}
         item.dataset.status = next==='✅' ? 'owned' : 'absent';
         statusBtn.classList.toggle('absent', next==='➖');
         updateCounter();
-        saveDexStateDebounced();
-        return;
-      }
-      const addIndivBtn = e.target.closest('.add-individual');
-      if(addIndivBtn){
-        addIndividual(addIndivBtn.closest('.details'));
-        saveDexStateDebounced();
-        return;
-      }
-      const indivTab = e.target.closest('.individual:not(.add-individual)');
-      if(indivTab){
-        switchIndividual(indivTab.closest('.details'), indivTab.dataset.indiv);
         saveDexStateDebounced();
         return;
       }
