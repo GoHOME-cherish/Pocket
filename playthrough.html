@@ -628,7 +628,7 @@ button,label{touch-action:manipulation}
         if(!name || !qty || qty<=0) return;
         if(!totals[name]) totals[name] = { total:0, breakdown:[] };
         totals[name].total += qty;
-        totals[name].breakdown.push(`${r.name} ${qty}個`);
+        totals[name].breakdown.push({ romName: r.name, qty });
       });
     }
 
@@ -637,13 +637,32 @@ button,label{touch-action:manipulation}
       container.innerHTML = '<div class="pt-cross-empty">まだ持ち物メモに個数が入力されたアイテムがありません。</div>';
       return;
     }
-    container.innerHTML = names.map(name=>{
+    // ユーザー入力(アイテム名・ROM名)をHTMLとして解釈させないよう、DOMを組み立ててtextContentで差し込む
+    container.innerHTML = '';
+    names.forEach(name=>{
       const t = totals[name];
-      return `<div class="pt-cross-total">
-        <span class="item-name">${name}</span> 合計 <span class="total-num">${t.total}</span> 個
-        <span class="breakdown">内訳：${t.breakdown.join(' ／ ')}</span>
-      </div>`;
-    }).join('');
+      const row = document.createElement('div');
+      row.className = 'pt-cross-total';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'item-name';
+      nameSpan.textContent = name;
+
+      const totalSpan = document.createElement('span');
+      totalSpan.className = 'total-num';
+      totalSpan.textContent = String(t.total);
+
+      const breakdownSpan = document.createElement('span');
+      breakdownSpan.className = 'breakdown';
+      breakdownSpan.textContent = '内訳：' + t.breakdown.map(b=>`${b.romName} ${b.qty}個`).join(' ／ ');
+
+      row.appendChild(nameSpan);
+      row.append(' 合計 ');
+      row.appendChild(totalSpan);
+      row.append(' 個');
+      row.appendChild(breakdownSpan);
+      container.appendChild(row);
+    });
   }
 
   // ===== 初期化 =====

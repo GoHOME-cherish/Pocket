@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta id="viewport-meta" name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f5f4f1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -47,13 +47,13 @@ html[data-theme="dark"]{
   --rose-soft:#3a2c31;
   --danger:#e08b7a;
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
 button,input,select,textarea{font:inherit;color:inherit}
 button,label{touch-action:manipulation}
 button{cursor:pointer}
 #drawer-none,#left-toggle,#right-toggle{position:fixed;opacity:0;pointer-events:none}
-.app{min-height:100vh}
+.app{min-height:100vh;min-height:100dvh}
 .topbar{
   position:sticky;top:0;z-index:30;height:52px;
   display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
@@ -108,7 +108,7 @@ button{cursor:pointer}
 .search-shell>span{font-size:13px;padding-left:12px;opacity:.6}
 .search-shell input{flex:1;min-width:0;border:0;background:transparent;outline:0;padding:10px 8px;font-size:13px}
 .search-shell details{position:relative}
-.search-shell summary{list-style:none;padding:11px 12px;font-size:10px;color:var(--muted);cursor:pointer}
+.search-shell summary{display:block;list-style:none;padding:11px 12px;font-size:10px;color:var(--muted);cursor:pointer}
 .search-shell summary::-webkit-details-marker{display:none}
 .search-pop{
   position:absolute;right:0;top:38px;width:min(310px,88vw);
@@ -119,6 +119,11 @@ button{cursor:pointer}
 .field{display:grid;gap:4px;font-size:9px;color:var(--muted);min-width:0}
 .field input,.field select,.field textarea{
   width:100%;max-width:100%;box-sizing:border-box;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 8px;font-size:11px;outline:none
+}
+.field select{
+  -webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23809099' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 8px center;padding-right:22px
 }
 .field input[type="date"]{
   min-width:0;-webkit-appearance:none;appearance:none;font-size:10.5px;padding:6px 4px
@@ -176,7 +181,7 @@ button{cursor:pointer}
 .indiv-group{display:none}
 .indiv-group.active{display:block}
 .dgroup{border-top:1px solid var(--line2)}
-.dgroup summary{list-style:none;padding:8px 0;font-size:10px;font-weight:650;color:#607786;cursor:pointer}
+.dgroup summary{display:block;list-style:none;padding:8px 0;font-size:10px;font-weight:650;color:#607786;cursor:pointer}
 .dgroup summary::-webkit-details-marker{display:none}
 .dgroup summary::after{content:"⌄";float:right;color:var(--faint)}
 .dgroup[open] summary::after{content:"⌃"}
@@ -265,7 +270,7 @@ button{cursor:pointer}
 .current-name{font-size:18px;font-weight:700}
 .current-base{font-size:9px;color:var(--muted);margin-top:3px}
 .drawer details{border-bottom:1px solid var(--line2)}
-.drawer details>summary{list-style:none;padding:13px 14px;font-size:11px;font-weight:650;cursor:pointer}
+.drawer details>summary{display:block;list-style:none;padding:13px 14px;font-size:11px;font-weight:650;cursor:pointer}
 .drawer details>summary::-webkit-details-marker{display:none}
 .drawer details>summary::after{content:"＋";float:right;color:var(--faint);font-weight:400}
 .drawer details[open]>summary::after{content:"−"}
@@ -317,7 +322,7 @@ button{cursor:pointer}
 .gsearch-advanced>summary::after{content:"詳細検索 ⌄";color:var(--faint);font-weight:400;font-size:9px}
 .gsearch-advanced[open]>summary::after{content:"詳細検索 ⌃"}
 .gsearch-sub{border-top:1px solid var(--line2)}
-.gsearch-sub>summary{list-style:none;padding:9px 2px;font-size:10px;font-weight:620;color:var(--text);cursor:pointer}
+.gsearch-sub>summary{display:block;list-style:none;padding:9px 2px;font-size:10px;font-weight:620;color:var(--text);cursor:pointer}
 .gsearch-sub>summary::-webkit-details-marker{display:none}
 .gsearch-sub>summary::after{content:"⌄";float:right;color:var(--faint)}
 .gsearch-sub[open]>summary::after{content:"⌃"}
@@ -526,15 +531,15 @@ button{cursor:pointer}
           <input id="side-display-name" value="" placeholder="―" maxlength="40">
         </label>
         <div class="grid2">
-          <label class="field">主人公名<input placeholder="―"></label>
-          <label class="field">プレイ時間<input placeholder="―"></label>
-          <label class="field">バッジ<input placeholder="―"></label>
-          <label class="field">所持金<input placeholder="―"></label>
+          <label class="field">主人公名<input id="romMeta-trainerName" placeholder="―"></label>
+          <label class="field">プレイ時間<input id="romMeta-playTime" placeholder="―"></label>
+          <label class="field">バッジ<input id="romMeta-badges" placeholder="―"></label>
+          <label class="field">所持金<input id="romMeta-money" placeholder="―"></label>
         </div>
         <label class="field">進行
-          <select><option>未クリア</option><option>クリア</option><option>殿堂入り後</option></select>
+          <select id="romMeta-progress"><option>未クリア</option><option>クリア</option><option>殿堂入り後</option></select>
         </label>
-        <label class="field">メモ<textarea rows="3" placeholder="メモ"></textarea></label>
+        <label class="field">メモ<textarea id="romMeta-memo" rows="3" placeholder="メモ"></textarea></label>
       </div>
     </details>
 
@@ -610,8 +615,8 @@ button{cursor:pointer}
           <summary>個体情報</summary>
           <div class="gsearch-sub-body">
             <div class="grid2">
-              <label class="field">親名（OT）<input placeholder="―"></label>
-              <label class="field">親ID<input placeholder="―"></label>
+              <label class="field">親名（OT）<input id="search-ot-name" placeholder="―"></label>
+              <label class="field">親ID<input id="search-ot-id" placeholder="―"></label>
               <label class="field full">
                 <div class="field-head">ポケルス<button class="invert-toggle" data-invert-for="pokerus" title="未所持で検索">⚠️</button></div>
                 <select id="search-pokerus"><option>―</option><option>感染中</option><option>治療済み</option></select>
@@ -623,7 +628,9 @@ button{cursor:pointer}
                   <option>モンスターボール</option><option>サファリボール</option><option>ネットボール</option><option>ダイブボール</option>
                   <option>ネストボール</option><option>リピートボール</option><option>タイマーボール</option><option>ゴージャスボール</option>
                   <option>プレミアボール</option><option>ダークボール</option><option>ヒールボール</option><option>クイックボール</option>
-                  <option>プレシャスボール</option><option>パークボール</option>
+                  <option>プレシャスボール</option><option>パークボール</option><option>ルアーボール</option><option>レベルボール</option>
+                  <option>ムーンボール</option><option>ヘビーボール</option><option>スピードボール</option><option>フレンドボール</option>
+                  <option>ラブラブボール</option><option>コンペボール</option><option>ウルトラボール</option>
                 </select>
               </label>
             </div>
@@ -863,6 +870,16 @@ button{cursor:pointer}
 
   function opts(arr){ return arr.map(v=>`<option>${v}</option>`).join(''); }
 
+  // ユーザー入力・インポート由来の値をHTML文字列に埋め込む際に使う、最低限のエスケープ
+  function escapeHtml(v){
+    return String(v==null ? '' : v)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
   // ===== IndexedDB =====
   const DB_NAME = 'gohome_cherish_db';
   const DB_VERSION = 1;
@@ -1022,6 +1039,23 @@ button{cursor:pointer}
       return false;
     }
   }
+
+  async function idbGetAllKeys(){
+    try{
+      const db = await openDb();
+      const keys = await new Promise((resolve, reject)=>{
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).getAllKeys();
+        req.onsuccess = ()=> resolve(req.result);
+        req.onerror = (e)=> reject(e.target.error);
+      });
+      return keys;
+    }catch(err){
+      console.error('idbGetAllKeys失敗', err);
+      dlog(`idbGetAllKeys失敗: ${err && err.message}`);
+      return [];
+    }
+  }
   // 短時間の連続呼び出しをまとめて1回の保存にする(高頻度なトグル操作対策)
   function debounce(fn, wait){
     let timer=null;
@@ -1045,6 +1079,49 @@ button{cursor:pointer}
     return ok;
   }
   const saveRomListDebounced = debounce(saveRomList, 400);
+
+  // 「このソフトの情報」6項目(主人公名/プレイ時間/バッジ/所持金/進行/メモ)の保存・復元
+  function romMetaFormEls(){
+    return {
+      trainerName: $('#romMeta-trainerName'),
+      playTime: $('#romMeta-playTime'),
+      badges: $('#romMeta-badges'),
+      money: $('#romMeta-money'),
+      progress: $('#romMeta-progress'),
+      memo: $('#romMeta-memo')
+    };
+  }
+  async function saveRomMeta(romId){
+    if(!romId) return;
+    const els = romMetaFormEls();
+    const meta = {
+      trainerName: els.trainerName.value,
+      playTime: els.playTime.value,
+      badges: els.badges.value,
+      money: els.money.value,
+      progress: els.progress.value,
+      memo: els.memo.value
+    };
+    await idbSet('romMeta:'+romId, meta);
+  }
+  const saveRomMetaDebounced = debounce(saveRomMeta, 500);
+
+  // 表示中ROMを切り替える直前に、フォームに入っている現在の内容を確実に保存する
+  async function flushRomMeta(){
+    if(currentRomId) await saveRomMeta(currentRomId);
+  }
+
+  // 指定ROMのromMetaを読み込んでフォームへ反映する(保存が無ければ空欄に戻す)
+  async function loadRomMetaIntoForm(romId){
+    const els = romMetaFormEls();
+    const meta = romId ? (await idbGet('romMeta:'+romId)) : null;
+    els.trainerName.value = meta ? (meta.trainerName||'') : '';
+    els.playTime.value = meta ? (meta.playTime||'') : '';
+    els.badges.value = meta ? (meta.badges||'') : '';
+    els.money.value = meta ? (meta.money||'') : '';
+    els.progress.value = meta ? (meta.progress||'未クリア') : '未クリア';
+    els.memo.value = meta ? (meta.memo||'') : '';
+  }
 
   async function restoreRomList(){
     const saved = await idbGet('romList');
@@ -1320,7 +1397,8 @@ button{cursor:pointer}
     if(!currentRomId) return;
     const items = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const stateMap = {};
-    const MAX_INDIVIDUALS = 20;
+    // アンノーン等、同一種を大量に集める需要に対応しつつ、異常増殖を防ぐための安全上限
+    const MAX_INDIVIDUALS = 300;
     items.forEach(item=>{
       const key = item.dataset.uniqueKey || item.dataset.no;
       if(!stateMap[key]) stateMap[key] = [];
@@ -1349,8 +1427,8 @@ button{cursor:pointer}
       // 旧形式(単一オブジェクト)は配列に変換して扱う
       if(!Array.isArray(states)) states = [states];
       if(!states.length) return;
-      // 異常なデータ(過去の不具合等)による無制限増殖を防ぐための安全上限
-      const MAX_INDIVIDUALS = 20;
+      // 異常なデータ(過去の不具合等)による無制限増殖を防ぐための安全上限(アンノーン等の大量収集にも対応できる余裕を持たせる)
+      const MAX_INDIVIDUALS = 300;
       if(states.length > MAX_INDIVIDUALS){
         console.warn(`${key} の保存個体数が異常に多いため(${states.length}件)、先頭${MAX_INDIVIDUALS}件のみ復元します`);
         states = states.slice(0, MAX_INDIVIDUALS);
@@ -1638,6 +1716,12 @@ button{cursor:pointer}
   }
   bindDexEvents($('.main'));
 
+  // 「このソフトの情報」6項目: 入力・変更のたびに現在ROMへ保存する
+  ['romMeta-trainerName','romMeta-playTime','romMeta-badges','romMeta-money','romMeta-memo'].forEach(id=>{
+    $('#'+id).addEventListener('input', ()=>{ if(currentRomId) saveRomMetaDebounced(currentRomId); });
+  });
+  $('#romMeta-progress').addEventListener('change', ()=>{ if(currentRomId) saveRomMeta(currentRomId); });
+
   // Editable software display name.
   const sheet=$('#edit-sheet'), title=$('#rom-title'), sideName=$('#side-current-name'), sideInput=$('#side-display-name'), editInput=$('#edit-name-input');
   $('#edit-title').addEventListener('click',()=>{editInput.value=title.textContent;sheet.classList.add('show');setTimeout(()=>{editInput.focus();editInput.select()},50)});
@@ -1657,7 +1741,19 @@ button{cursor:pointer}
     }
     closeEdit();toast('表示名を変更しました')
   };
-  sideInput.addEventListener('input',()=>{const v=sideInput.value||$('#side-current-base').textContent;title.textContent=v;sideName.textContent=v});
+  sideInput.addEventListener('input',()=>{
+    const v=sideInput.value||$('#side-current-base').textContent;
+    title.textContent=v;sideName.textContent=v;
+    // SOFTWARE LIST側の表示名・チップも同期させる(以前はここで画面表示のみ変更され、保存されていなかった)
+    const activeRomBtn = $('#rom-list .rom.active');
+    if(activeRomBtn){
+      activeRomBtn.dataset.rom=v;
+      const strongEl = activeRomBtn.querySelector('strong');
+      if(strongEl) strongEl.textContent=v;
+      syncRomChips();
+      saveRomListDebounced();
+    }
+  });
   sheet.addEventListener('click',e=>{if(e.target===sheet)closeEdit()});
 
   // ROM switching (event delegation)。ROM切替時に対応するdata/○○.jsonを読み込む
@@ -1676,10 +1772,12 @@ button{cursor:pointer}
     const btn = e.target.closest('.rom');
     if(!btn) return;
     await saveDexState(); // 切り替え前の状態を保存(確実に完了させてから切り替える)
+    await flushRomMeta(); // 切り替え前のromMetaも確実に保存する
     $$('.rom').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
     const name=btn.dataset.rom, base=btn.dataset.base;
     currentRomId = btn.dataset.romId;
     title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
+    await loadRomMetaIntoForm(currentRomId);
     await saveRomList(); // どのROMがactiveかも確実に保存
     closeDrawers(); toast(name+' に切り替えました');
     const gameId = GAME_ID_MAP[base];
@@ -1693,7 +1791,7 @@ button{cursor:pointer}
   $('#add-rom-close').onclick=closeAddSheet; $('#add-rom-cancel').onclick=closeAddSheet;
   addSheet.addEventListener('click',e=>{if(e.target===addSheet)closeAddSheet()});
   function romInnerHtml(name, base){
-    return `<span><strong>${name}</strong><small>${base}</small></span>
+    return `<span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(base)}</small></span>
       <span class="arrow">›</span>
       <span class="rom-edit-controls">
         <button type="button" class="rom-up">↑</button>
@@ -1793,6 +1891,7 @@ button{cursor:pointer}
       btn.classList.add('active');
       currentRomId = btn.dataset.romId;
       title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
+      await loadRomMetaIntoForm(currentRomId); // 新規ROMなのでromMetaは空欄になる
       const gameId = GAME_ID_MAP[base];
       if(gameId) loadGameData(gameId);
     }
@@ -1904,9 +2003,19 @@ button{cursor:pointer}
     }, true);
   });
 
-  // ===== 全ROM横断検索：データ集約 =====
+  // ===== 全ROM横断検索：①データ集約 =====
   const gameDataCache = {}; // gameId -> data/{gameId}.json の中身をキャッシュ
   let distEventsCache = null; // distribution_events.json のキャッシュ
+
+  // gameId(base名ではなく実ファイル名)ごとの地方名。X/Yはグループが複数あるがどれも「カロス」として扱う。
+  const REGION_OF_GAME = {
+    'diamond':'shinou','pearl':'shinou','platinum':'shinou',
+    'heartgold':'jouto','soulsilver':'jouto',
+    'black':'isshu','white':'isshu','black2':'isshu','white2':'isshu',
+    'x':'kalos','y':'kalos',
+    'omega-ruby':'houen','alpha-sapphire':'houen',
+    'sun':'alola','moon':'alola','ultra-sun':'alola','ultra-moon':'alola'
+  };
 
   async function fetchGameDataCached(gameId){
     if(gameDataCache[gameId]) return gameDataCache[gameId];
@@ -1935,20 +2044,20 @@ button{cursor:pointer}
     }
   }
 
-  // 図鑑JSON1本分の全種(regionalDex+nationalOnly)を、nationalNoの重複を除いて1本の配列にする
+  // 図鑑JSON1本分の全種(regionalDex+regionalDexGroups+nationalOnly)を、nationalNoの重複を除いて1本の配列にする
   function allSpeciesOf(gameData){
     const seen = new Set();
     const list = [];
-    (gameData.regionalDex||[]).forEach(sp=>{
+    const pushSp = sp=>{
       if(seen.has(sp.nationalNo)) return;
       seen.add(sp.nationalNo);
       list.push(sp);
-    });
-    (gameData.nationalOnly||[]).forEach(sp=>{
-      if(seen.has(sp.nationalNo)) return;
-      seen.add(sp.nationalNo);
-      list.push(sp);
-    });
+    };
+    (gameData.regionalDex||[]).forEach(pushSp);
+    if(gameData.multiRegionalDex && Array.isArray(gameData.regionalDexGroups)){
+      gameData.regionalDexGroups.forEach(g=>(g.dex||[]).forEach(pushSp));
+    }
+    (gameData.nationalOnly||[]).forEach(pushSp);
     return list;
   }
 
@@ -1964,28 +2073,35 @@ button{cursor:pointer}
       if(!gameData) continue;
       const species = allSpeciesOf(gameData);
       const stateMap = (await idbGet('dexState:'+rom.romId)) || {};
+      const region = REGION_OF_GAME[gameId] || null;
 
       species.forEach(sp=>{
-        const key = String(sp.nationalNo); // uniqueKeyを使わない種は nationalNo をキーにする想定
+        const key = String(sp.nationalNo);
         let stArr = stateMap[key] || stateMap[String(sp.localNo)];
         if(!stArr) stArr = [null]; // 記録なし = 未所持1件として扱う
         if(!Array.isArray(stArr)) stArr = [stArr];
         stArr.forEach((st, idx)=>{
+          const detail = st ? (st.detailGroup||{}) : {};
           records.push({
             kind: 'dex',
             romId: rom.romId,
             romName: rom.name,
             romBase: rom.base,
+            region,
             no: sp.localNo ?? null,
             nationalNo: sp.nationalNo,
             nameJa: sp.nameJa,
             indivIndex: idx,
             status: st ? (st.status||'absent') : 'absent',
-            favorite: st ? st.favorite==='1'||st.favorite===true : false,
-            shiny: st ? st.shiny==='1'||st.shiny===true : false,
-            home: st ? st.home==='1'||st.home===true : false,
+            favorite: st ? (st.favorite==='1'||st.favorite===true) : false,
+            shiny: st ? (st.shiny==='1'||st.shiny===true) : false,
+            home: st ? (st.home==='1'||st.home===true) : false,
             transfers: st ? (st.transfers||{}) : {},
-            detailGroup: st ? (st.detailGroup||null) : null
+            otName: detail['OT'] || '',
+            otId: detail['ID'] || '',
+            pokerus: detail['ポケルス'] || '',
+            ball: detail['ボール'] || '',
+            ribbons: detail['リボン'] || []
           });
         });
       });
@@ -2011,7 +2127,13 @@ button{cursor:pointer}
           shifter: st ? !!st.shifter : false,
           mover: st ? !!st.mover : false,
           hasCard: st ? !!st.hasCard : false,
-          received: st ? !!st.received : false
+          received: st ? !!st.received : false,
+          // 配布ポケモンは親名・ボール等がマスターデータ側(ev)に固定で入っている
+          otName: ev.otName || '',
+          otId: ev.otId || '',
+          pokerus: '',
+          ball: ev.ball || '',
+          ribbons: ev.ribbon ? [ev.ribbon] : []
         });
       });
     });
@@ -2019,12 +2141,30 @@ button{cursor:pointer}
     return records;
   }
 
-  // ===== 全ROM横断検索：基本表示 =====
+  // ===== 全ROM横断検索：②基本表示 / ③クイックフィルター / ④詳細検索 =====
   const gfSet = new Set();
   const gsearch=$('#global-search');
   const globalResultsEl = $('#global-results');
-  let allRecordsCache = null; // collectAllRecords()の結果をこの検索セッション中だけ保持
-  let globalDataDirty = true; // ドロワーを開き直した時などに再集約させるフラグ
+  let allRecordsCache = null;
+  let globalDataDirty = true;
+
+  // 詳細検索の状態(UIのchip/select/inputから毎回読み取る)
+  function getAdvancedSearchState(){
+    const regionOn = $('#region-chips .chip.on');
+    const romOn = $('#rom-chips .chip.on');
+    return {
+      region: regionOn ? regionOn.dataset.region : 'all',
+      romFilter: romOn ? romOn.dataset.romFilter : 'all',
+      pokerus: $('#search-pokerus').value,
+      pokerusInvert: $('.invert-toggle[data-invert-for="pokerus"]').classList.contains('on'),
+      ball: $('#search-ball').value,
+      ballInvert: $('.invert-toggle[data-invert-for="ball"]').classList.contains('on'),
+      otName: $('#search-ot-name').value.trim(),
+      otId: $('#search-ot-id').value.trim(),
+      ribbons: $$('#ribbon-search-chips .chip.on').map(c=>c.dataset.ribbon),
+      ribbonInvert: $('.invert-toggle[data-invert-for="ribbon"]').classList.contains('on')
+    };
+  }
 
   function recordMatchesQuery(rec, q){
     if(!q) return true;
@@ -2044,6 +2184,37 @@ button{cursor:pointer}
       if(f==='transporter') return rec.kind==='distribution' ? !!rec.mover : !!(rec.transfers&&rec.transfers['📤']);
       return true;
     });
+  }
+
+  function recordMatchesAdvanced(rec, adv){
+    // 地方図鑑：配布ポケモンには地方の概念が無いので、地方を絞っている間は対象外にする
+    if(adv.region!=='all'){
+      if(rec.kind==='distribution') return false;
+      if(rec.region!==adv.region) return false;
+    }
+    // 保有ROM：配布ポケモンはROM横断のため、ROM絞り込み中は対象外にする
+    if(adv.romFilter!=='all'){
+      if(rec.kind==='distribution') return false;
+      if(rec.romName!==adv.romFilter) return false;
+    }
+    // 個体情報
+    if(adv.otName && !(rec.otName||'').includes(adv.otName)) return false;
+    if(adv.otId && !(rec.otId||'').includes(adv.otId)) return false;
+    if(adv.pokerus!=='―'){
+      const has = (rec.pokerus||'')===adv.pokerus;
+      if(adv.pokerusInvert ? has : !has) return false;
+    }
+    if(adv.ball!=='―'){
+      const has = (rec.ball||'')===adv.ball;
+      if(adv.ballInvert ? has : !has) return false;
+    }
+    // リボン(複数選択、いずれか一致をOR、反転で「どれも持っていない」に切替)
+    if(adv.ribbons.length){
+      const owned = rec.ribbons||[];
+      const hasAny = adv.ribbons.some(r=>owned.includes(r));
+      if(adv.ribbonInvert ? hasAny : !hasAny) return false;
+    }
+    return true;
   }
 
   function resultIconsHtml(rec){
@@ -2069,18 +2240,21 @@ button{cursor:pointer}
       ? `配布${rec.commonNameJa?'｜'+rec.commonNameJa:''}`
       : `${rec.romName}｜No.${String(rec.no).padStart(3,'0')}`;
     return `
-      <button class="result" data-kind="${rec.kind}" data-hit="${rec.kind==='distribution'?rec.eventId:rec.no}" data-romname="${rec.romName||''}">
+      <button class="result" data-kind="${rec.kind}" data-hit="${rec.kind==='distribution'?rec.eventId:rec.no}" data-romname="${escapeHtml(rec.romName||'')}">
         <div class="result-main">
-          <strong>${rec.nameJa}</strong>
+          <strong>${escapeHtml(rec.nameJa)}</strong>
           <span class="result-icons">${resultIconsHtml(rec)}</span>
         </div>
-        <small>${sub}</small>
+        <small>${escapeHtml(sub)}</small>
       </button>`;
   }
 
   async function applyGlobal(){
     const q=gsearch.value.trim().toLowerCase();
-    const hasFilter = gfSet.size>0;
+    const adv = getAdvancedSearchState();
+    const advActive = adv.region!=='all' || adv.romFilter!=='all' || adv.otName || adv.otId
+      || adv.pokerus!=='―' || adv.ball!=='―' || adv.ribbons.length>0;
+    const hasFilter = gfSet.size>0 || advActive;
     if(!q && !hasFilter){
       globalResultsEl.innerHTML = '<div class="empty-note">キーワードを入力するか、フィルターを選ぶと検索結果が表示されます。</div>';
       return;
@@ -2091,7 +2265,9 @@ button{cursor:pointer}
       globalDataDirty = false;
     }
     const MAX_SHOW = 300; // 一度に大量描画してブラウザが重くならないよう上限を設ける
-    const filtered = allRecordsCache.filter(rec=>recordMatchesQuery(rec,q)&&recordMatchesFilters(rec));
+    const filtered = allRecordsCache.filter(rec=>
+      recordMatchesQuery(rec,q) && recordMatchesFilters(rec) && recordMatchesAdvanced(rec, adv)
+    );
     if(!filtered.length){
       globalResultsEl.innerHTML = '<div class="empty-note">条件に合うポケモンが見つかりませんでした。</div>';
       return;
@@ -2107,6 +2283,7 @@ button{cursor:pointer}
       applyGlobal();
     }
   });
+
   $$('[data-g]').forEach(btn=>btn.addEventListener('click',()=>{
     if(btn.dataset.g==='all'){
       gfSet.clear();
@@ -2126,10 +2303,12 @@ button{cursor:pointer}
   }));
   $$('#region-chips .chip').forEach(btn=>btn.addEventListener('click',()=>{
     $$('#region-chips .chip').forEach(x=>x.classList.remove('on'));btn.classList.add('on');
+    applyGlobal();
   }));
   $('#rom-chips').addEventListener('click', e=>{
     const btn=e.target.closest('.chip'); if(!btn) return;
     $$('#rom-chips .chip').forEach(x=>x.classList.remove('on'));btn.classList.add('on');
+    applyGlobal();
   });
   function syncRomChips(){
     const chipsWrap=$('#rom-chips');
@@ -2146,7 +2325,12 @@ button{cursor:pointer}
   $('#ribbon-search-chips').addEventListener('click', e=>{
     const btn=e.target.closest('.chip'); if(!btn) return;
     btn.classList.toggle('on');
+    applyGlobal();
   });
+  $('#search-pokerus').addEventListener('change', applyGlobal);
+  $('#search-ball').addEventListener('change', applyGlobal);
+  $('#search-ot-name').addEventListener('input', applyGlobal);
+  $('#search-ot-id').addEventListener('input', applyGlobal);
 
   $$('.invert-toggle').forEach(btn=>btn.addEventListener('click',()=>{
     btn.classList.toggle('on');
@@ -2157,10 +2341,39 @@ button{cursor:pointer}
       const field=btn.closest('.field');
       if(field) field.classList.toggle('inverted', btn.classList.contains('on'));
     }
+    applyGlobal();
   }));
 
-  // 全ROM横断検索の結果は動的生成に変わったため、クリックジャンプは別ステップで作り直す予定(現時点では未接続)。
+  // 一覧の行をタップすると、対応するROMに切り替えて図鑑上でハイライト表示する(配布ポケモンはジャンプ非対応)
+  globalResultsEl.addEventListener('click', async e=>{
+    const r = e.target.closest('.result');
+    if(!r) return;
+    if(r.dataset.kind==='distribution'){
+      toast('配布図鑑ページから確認してください');
+      return;
+    }
+    const no=r.dataset.hit, rom=r.dataset.romname;
+    // 対象ROMがすでに表示中でなければ、そのROMに切り替える
+    const targetBtn = $$('#rom-list .rom').find(b=>b.dataset.rom===rom);
+    if(targetBtn && !targetBtn.classList.contains('active')){
+      targetBtn.click();
+      await new Promise(res=>setTimeout(res, 300)); // ROM切り替え(図鑑再描画)を待つ
+    }
+    closeDrawers();
+    $$('.dex-item').forEach(x=>x.classList.remove('highlight'));
+    const target=$('.dex-item[data-no="'+String(no).padStart(3,'0')+'"]');
+    if(target){
+      const natDex=target.closest('.national-dex');
+      if(natDex) natDex.open=true;
+      target.style.display='';
+      target.classList.add('highlight');
+      $('#focus-label').textContent='🔍 '+target.dataset.name+' を表示中';
+      $('#focusbar').classList.add('show');
+      setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}),50);
+    }
+  });
   $('#clear-focus').onclick=()=>{$$('.dex-item').forEach(x=>x.classList.remove('highlight'));$('#focusbar').classList.remove('show')};
+
 
   // Backup / Export / Import.
   $('#backup-btn').onclick=()=>{$('#backup-sheet').classList.add('show');closeDrawers()};
@@ -2248,14 +2461,8 @@ button{cursor:pointer}
 
   // IndexedDB上の全キーを列挙して、GoHOME cherish関連のデータを1つにまとめる
   async function collectAllData(){
-    const db = await openDb();
-    const keys = await new Promise((resolve, reject)=>{
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).getAllKeys();
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = (e)=> reject(e.target.error);
-    });
-    await saveDexState(); // 書き出し直前に、現在表示中ROMの最新状態を確実に保存しておく
+    await saveDexState(); // 書き出し直前に、現在表示中ROMの最新状態を確実に保存しておく(キー列挙より必ず先に行う)
+    const keys = await idbGetAllKeys();
     const romList = (await idbGet('romList')) || [];
     const dexStates = {};
     const playthroughMemos = {};
@@ -2266,13 +2473,18 @@ button{cursor:pointer}
         playthroughMemos[key.slice('playthroughMemo:'.length)] = await idbGet(key);
       }
     }
+    // 配布図鑑・タスクも「完全バックアップ」の対象に含める(存在しない場合はundefinedのまま保持しない)
+    const distributionState = (await idbGet('distributionState')) || null;
+    const taskState = (await idbGet('taskState')) || null;
     return {
       app: 'GoHOME cherish',
       exportedAt: new Date().toISOString(),
-      version: 2,
+      version: 3,
       romList,
       dexStates,
-      playthroughMemos
+      playthroughMemos,
+      distributionState,
+      taskState
     };
   }
 
@@ -2296,6 +2508,17 @@ button{cursor:pointer}
     return JSON.stringify(data, null, 2);
   }
 
+  // 種ごとに配列(複数個体)で保存されているdexStateを、個体単位のフラットな配列にする
+  function flattenDexState(state){
+    const flat = [];
+    Object.values(state).forEach(stArr=>{
+      if(!stArr) return;
+      if(!Array.isArray(stArr)) stArr = [stArr];
+      stArr.forEach(st=>{ if(st) flat.push(st); });
+    });
+    return flat;
+  }
+
   // ----- TXT書き出し(簡易サマリー) -----
   function buildTxtExport(data){
     const lines = [];
@@ -2304,10 +2527,10 @@ button{cursor:pointer}
     lines.push('');
     data.romList.forEach(rom=>{
       const state = data.dexStates[rom.romId] || {};
-      const entries = Object.values(state);
-      const ownedCount = entries.filter(e=>e && e.status==='owned').length;
+      const entries = flattenDexState(state);
+      const ownedCount = entries.filter(e=>e.status==='owned').length;
       lines.push(`■ ${rom.name}（${rom.base}）`);
-      lines.push(`  所持数: ${ownedCount} / ${entries.length}種`);
+      lines.push(`  所持数: ${ownedCount} / ${entries.length}匹`);
       const memo = data.playthroughMemos[rom.romId];
       if(memo){
         lines.push(`  リセット済み: ${memo.reset ? 'はい' : 'いいえ'}`);
@@ -2328,10 +2551,10 @@ button{cursor:pointer}
     lines.push('');
     data.romList.forEach(rom=>{
       const state = data.dexStates[rom.romId] || {};
-      const entries = Object.values(state);
-      const ownedCount = entries.filter(e=>e && e.status==='owned').length;
-      const shinyCount = entries.filter(e=>e && e.shiny==='1').length;
-      const homeCount = entries.filter(e=>e && e.home==='1').length;
+      const entries = flattenDexState(state);
+      const ownedCount = entries.filter(e=>e.status==='owned').length;
+      const shinyCount = entries.filter(e=>e.shiny==='1').length;
+      const homeCount = entries.filter(e=>e.home==='1').length;
       lines.push(`## ${rom.name}（${rom.base}）`);
       lines.push('');
       lines.push('| 項目 | 値 |');
@@ -2373,21 +2596,25 @@ button{cursor:pointer}
     data.romList.forEach(rom=>{
       const state = data.dexStates[rom.romId] || {};
       Object.keys(state).forEach(no=>{
-        const e = state[no];
-        if(!e) return;
-        const indiv = (e.individuals && e.individuals[0]) || {};
-        rows.push([
-          rom.name, rom.base, no,
-          e.status==='owned' ? '所持' : '未所持',
-          e.favorite==='1' ? '1' : '0',
-          e.shiny==='1' ? '1' : '0',
-          e.home==='1' ? '1' : '0',
-          e.transfers && e.transfers['🏹'] ? '1' : '0',
-          e.transfers && e.transfers['📤'] ? '1' : '0',
-          indiv['ニックネーム'] || '',
-          indiv['性格'] || '',
-          indiv['ボール'] || ''
-        ]);
+        let stArr = state[no];
+        if(!stArr) return;
+        if(!Array.isArray(stArr)) stArr = [stArr]; // 旧形式(単一オブジェクト)の救済
+        stArr.forEach(st=>{
+          if(!st) return;
+          const detail = st.detailGroup || {};
+          rows.push([
+            rom.name, rom.base, no,
+            st.status==='owned' ? '所持' : '未所持',
+            st.favorite==='1' ? '1' : '0',
+            st.shiny==='1' ? '1' : '0',
+            st.home==='1' ? '1' : '0',
+            st.transfers && st.transfers['🏹'] ? '1' : '0',
+            st.transfers && st.transfers['📤'] ? '1' : '0',
+            detail['ニックネーム'] || '',
+            detail['性格'] || '',
+            detail['ボール'] || ''
+          ]);
+        });
       });
     });
     // Excel等での文字化け対策としてUTF-8 BOMを付与
@@ -2425,23 +2652,40 @@ button{cursor:pointer}
   $('#backup-import-file').addEventListener('change', async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    if(!confirm('現在保存されている全てのデータが、このファイルの内容で上書きされます。よろしいですか？')){
-      e.target.value='';
-      return;
-    }
     try{
+      // 1. まずファイルをparseし、それらしい形式か検証してから確認ダイアログを出す
       const text = await file.text();
       const data = JSON.parse(text);
       if(!data || data.app!=='GoHOME cherish' || !data.romList){
         toast('GoHOME cherishのバックアップファイルではないようです');
+        e.target.value='';
         return;
       }
+      if(!confirm('現在保存されている全てのデータを消去し、このファイルの内容で完全に置き換えます。よろしいですか？')){
+        e.target.value='';
+        return;
+      }
+      // 2. アプリが保存し得る既存キーを全て削除してから復元する(古いROMの孤児データを残さない)
+      const existingKeys = await idbGetAllKeys();
+      for(const key of existingKeys){
+        if(key==='romList' || key==='distributionState' || key==='taskState'
+          || key.startsWith('dexState:') || key.startsWith('playthroughMemo:')){
+          await idbDelete(key);
+        }
+      }
+      // 3. バックアップの全項目を復元する
       await idbSet('romList', data.romList);
       for(const romId in (data.dexStates||{})){
         await idbSet('dexState:'+romId, data.dexStates[romId]);
       }
       for(const romId in (data.playthroughMemos||{})){
         await idbSet('playthroughMemo:'+romId, data.playthroughMemos[romId]);
+      }
+      if(data.distributionState){
+        await idbSet('distributionState', data.distributionState);
+      }
+      if(data.taskState){
+        await idbSet('taskState', data.taskState);
       }
       toast('読み込みました。ページを再読み込みします…');
       setTimeout(()=>location.reload(), 1200);
@@ -2452,6 +2696,7 @@ button{cursor:pointer}
       e.target.value='';
     }
   });
+
 
   function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),1500)}
 
@@ -2476,6 +2721,7 @@ button{cursor:pointer}
       currentRomId = activeRomBtn.dataset.romId;
       const name = activeRomBtn.dataset.rom, base = activeRomBtn.dataset.base;
       title.textContent=name; sideName.textContent=name; $('#side-current-base').textContent=base; sideInput.value=name;
+      await loadRomMetaIntoForm(currentRomId);
       const gameId = GAME_ID_MAP[base] || 'diamond';
       await loadGameData(gameId);
     } else {
@@ -2643,6 +2889,22 @@ button{cursor:pointer}
     };
 
     updateThumb();
+  })();
+
+  // ===== iOS Safari対策：入力欄フォーカス時の自動拡大だけを防ぐ =====
+  // (ピンチズーム自体は制限したくないので、フォーカス中だけ一時的にmaximum-scale=1にする)
+  (function preventIosInputZoom(){
+    const viewportMeta = $('#viewport-meta');
+    if(!viewportMeta) return;
+    const normalContent = 'width=device-width,initial-scale=1,viewport-fit=cover';
+    const noZoomContent = 'width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover';
+    const isZoomableField = el => el && ['INPUT','SELECT','TEXTAREA'].includes(el.tagName);
+    document.addEventListener('focusin', e=>{
+      if(isZoomableField(e.target)) viewportMeta.setAttribute('content', noZoomContent);
+    });
+    document.addEventListener('focusout', e=>{
+      if(isZoomableField(e.target)) viewportMeta.setAttribute('content', normalContent);
+    });
   })();
 
   initApp();
