@@ -53,6 +53,22 @@ button{cursor:pointer}
   text-align:center;font-family:var(--mono);font-size:11px;
   letter-spacing:.08em;font-weight:650;white-space:nowrap;
 }
+
+.sticky-dex-head{
+  position:sticky;
+  top:calc(52px + env(safe-area-inset-top));
+  z-index:29;
+  background:rgba(245,244,241,.97);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  max-width:760px;margin:0 auto;padding:0 16px;
+  max-height:26px;overflow:hidden;
+  transition:max-height .18s ease, opacity .18s ease, border-color .18s ease;
+}
+.sticky-dex-head.hide{
+  max-height:0;opacity:0;border-color:transparent;
+}
+.sticky-dex-head .dex-head{border-bottom:0;min-height:auto;padding:5px 0}
+
 .main{max-width:760px;margin:0 auto;padding:18px 16px 60px}
 .rom-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:13px}
 .rom-name-wrap{display:flex;align-items:center;min-width:0;gap:3px}
@@ -422,6 +438,13 @@ button{cursor:pointer}
     <div class="brand">GoHOME cherish</div>
     <label class="top-action" for="right-toggle" aria-label="全ROM横断検索">🔍</label>
   </header>
+
+  <div id="sticky-dex-head" class="sticky-dex-head">
+    <div class="dex-head">
+      <span>🩷</span><span>No.</span><span>ポケモン</span><span>所持</span><span>色</span><span>HOME</span>
+      <span class="transfer-head">🏹</span><span class="transfer-head">📤</span><span></span>
+    </div>
+  </div>
 
   <label class="overlay" for="drawer-none" id="overlay-left"></label>
   <label class="overlay" for="drawer-none" id="overlay-right"></label>
@@ -1013,13 +1036,25 @@ button{cursor:pointer}
     </div>`;
   }
 
-  function buildDexItem(no, name, transferCols){
+  function buildDexItem(no, name, transferCols, indivIndex){
     const article=document.createElement('article');
     article.className='dex-item';
-    article.dataset.no=no; article.dataset.name=name;
+    article.dataset.no=no; article.dataset.name=name; article.dataset.indivIndex=indivIndex||1;
     article.dataset.status='absent'; article.dataset.favorite='0'; article.dataset.shiny='0'; article.dataset.home='0';
-    article.innerHTML = dexRowHtml(no,name,transferCols) + '<div class="details-slot"></div>';
+    article.innerHTML = dexRowHtml(no,name,transferCols,indivIndex) + '<div class="details-slot"></div>';
     return article;
+  }
+
+  // 1種分のコンテナを作る。既定では1個体(1行)だが、count>1なら複数行(ナエトル②③...)を生成する。
+  function buildDexSpecies(no, name, transferCols, count){
+    const wrap = document.createElement('div');
+    wrap.className = 'dex-species';
+    wrap.dataset.no = no; wrap.dataset.name = name;
+    const n = count && count>0 ? count : 1;
+    for(let i=1; i<=n; i++){
+      wrap.appendChild(buildDexItem(no, name, transferCols, i));
+    }
+    return wrap;
   }
 
   // ===== 図鑑1種分の状態の抽出・復元 =====
@@ -1157,13 +1192,15 @@ button{cursor:pointer}
     }
   }
 
-  // 現在表示中の全.dex-itemの状態を、現在のROM IDで保存する
+  // 現在表示中の全.dex-itemの状態を、現在のROM IDで保存する(同じNoの複数個体は配列で保持)
   async function saveDexState(){
     if(!currentRomId) return;
     const items = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const stateMap = {};
     items.forEach(item=>{
-      stateMap[item.dataset.no] = extractDexItemState(item);
+      const no = item.dataset.no;
+      if(!stateMap[no]) stateMap[no] = [];
+      stateMap[no].push(extractDexItemState(item));
     });
     const ok = await idbSet('dexState:'+currentRomId, stateMap);
     dlog(`saveDexState完了: romId=${currentRomId} ok=${ok}`);
@@ -1171,15 +1208,31 @@ button{cursor:pointer}
   }
   const saveDexStateDebounced = debounce(saveDexState, 600);
 
-  // 現在のROM IDの保存済み状態を、今表示している図鑑に反映する
+  // 現在のROM IDの保存済み状態を、今表示している図鑑に反映する(複数個体・旧形式の両対応)
   async function restoreDexState(){
     if(!currentRomId) return;
     const stateMap = await idbGet('dexState:'+currentRomId);
     if(!stateMap) return;
-    const items = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
-    items.forEach(item=>{
-      const state = stateMap[item.dataset.no];
-      if(state) applyDexItemState(item, state);
+    // 種ごとに、保存されている個体数ぶんの行をDOM上に用意してから状態を適用する
+    const speciesWraps = $$('#regional-dex-container .dex-species, #dex-national .dex-species');
+    speciesWraps.forEach(speciesEl=>{
+      const no = speciesEl.dataset.no;
+      let states = stateMap[no];
+      if(!states) return;
+      // 旧形式(単一オブジェクト)は配列に変換して扱う
+      if(!Array.isArray(states)) states = [states];
+      if(!states.length) return;
+      // 保存件数ぶん、行が足りなければ追加で生成する
+      const transferCols = !!speciesEl.querySelector('.transfer-toggle');
+      while(speciesEl.querySelectorAll('.dex-item').length < states.length){
+        const nextIndex = speciesEl.querySelectorAll('.dex-item').length + 1;
+        const name = speciesEl.dataset.name;
+        speciesEl.appendChild(buildDexItem(no, name, transferCols, nextIndex));
+      }
+      const items = speciesEl.querySelectorAll('.dex-item');
+      states.forEach((state, i)=>{
+        if(items[i]) applyDexItemState(items[i], state);
+      });
     });
     updateCounter();
   }
@@ -1203,7 +1256,7 @@ button{cursor:pointer}
         const frag = document.createDocumentFragment();
         group.dex.forEach(sp=>{
           const no=String(sp.localNo).padStart(3,'0');
-          frag.appendChild(buildDexItem(no, sp.nameJa, TRANSFER_COLS));
+          frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
         });
         section.appendChild(frag);
         container.appendChild(head);
@@ -1223,7 +1276,7 @@ button{cursor:pointer}
       const frag = document.createDocumentFragment();
       currentDexData.regionalDex.forEach(sp=>{
         const no=String(sp.localNo).padStart(3,'0');
-        frag.appendChild(buildDexItem(no, sp.nameJa, TRANSFER_COLS));
+        frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
       });
       section.appendChild(frag);
       container.appendChild(head);
@@ -1236,7 +1289,7 @@ button{cursor:pointer}
     const frag2=document.createDocumentFragment();
     currentDexData.nationalOnly.forEach(sp=>{
       const no=String(sp.nationalNo).padStart(3,'0');
-      frag2.appendChild(buildDexItem(no, sp.nameJa, TRANSFER_COLS));
+      frag2.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
     });
     natWrap.appendChild(frag2);
     const natCount = $('#national-count');
@@ -1248,9 +1301,13 @@ button{cursor:pointer}
   function updateCounter(){
     const all = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const owned = all.filter(i=>i.dataset.status==='owned');
+    // 種数は重複を除いたユニークなNo.の数、匹数は行の総数(複数個体を含む)で数える
+    const uniqueNos = new Set(all.map(i=>i.dataset.no));
+    const ownedUniqueNos = new Set(owned.map(i=>i.dataset.no));
+    const duplicateCount = all.length - uniqueNos.size;
     const counterEl = $('.counter');
     if(counterEl){
-      counterEl.innerHTML = `<b>${owned.length}</b>/${all.length}種<br><b>${owned.length}</b>匹 · 重複 <b>0</b>`;
+      counterEl.innerHTML = `<b>${ownedUniqueNos.size}</b>/${uniqueNos.size}種<br><b>${owned.length}</b>匹 · 重複 <b>${duplicateCount}</b>`;
     }
   }
 
@@ -1341,7 +1398,18 @@ button{cursor:pointer}
     container.addEventListener('click', e=>{
       const indivAddBtn = e.target.closest('.indiv-add-btn');
       if(indivAddBtn){
-        toast('複数個体の追加機能は準備中です');
+        const speciesEl = indivAddBtn.closest('.dex-species');
+        if(speciesEl){
+          const no = speciesEl.dataset.no;
+          const name = speciesEl.dataset.name;
+          const existing = speciesEl.querySelectorAll('.dex-item');
+          const nextIndex = existing.length + 1;
+          const transferCols = !!speciesEl.querySelector('.transfer-toggle');
+          const newItem = buildDexItem(no, name, transferCols, nextIndex);
+          speciesEl.appendChild(newItem);
+          saveDexStateDebounced();
+          toast(`${name}${toCircledNumber(nextIndex)} を追加しました`);
+        }
         return;
       }
       const expandBtn = e.target.closest('.expand');
@@ -1978,6 +2046,34 @@ button{cursor:pointer}
   }
 
   // ===== 右端ミニスクロールバー =====
+  // ===== 図鑑見出し(🩷No.ポケモン...)のスティッキー表示 =====
+  let refreshStickyDexHead = ()=>{};
+  (function setupStickyDexHead(){
+    const bar = $('#sticky-dex-head');
+    let lastY = window.scrollY;
+    let hidden = false;
+
+    function updateVisibility(){
+      // 図鑑一覧が実際に画面内にある時だけ、この固定見出しを使う
+      const anyRow = $('#regional-dex-container .dex-row, #dex-national .dex-row');
+      if(!anyRow){ bar.style.display='none'; return; }
+      bar.style.display='';
+
+      const y = window.scrollY;
+      const delta = y - lastY;
+      // 一定量より強く下にスクロールしたら隠す。少しでも上に戻せばすぐ出す。
+      if(delta > 6 && y > 80){
+        if(!hidden){ bar.classList.add('hide'); hidden = true; }
+      } else if(delta < -4 || y <= 80){
+        if(hidden){ bar.classList.remove('hide'); hidden = false; }
+      }
+      lastY = y;
+    }
+    window.addEventListener('scroll', updateVisibility, {passive:true});
+    refreshStickyDexHead = updateVisibility;
+    updateVisibility();
+  })();
+
   (function setupMiniScrollbar(){
     const bar = $('#mini-scrollbar');
     const thumb = $('#mini-scrollbar-thumb');
@@ -2068,6 +2164,7 @@ button{cursor:pointer}
     renderDex = function(...args){
       const result = origRenderDex.apply(this, args);
       setTimeout(updateThumb, 50);
+      setTimeout(refreshStickyDexHead, 50);
       return result;
     };
 
