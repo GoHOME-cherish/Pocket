@@ -72,20 +72,28 @@ button,label{touch-action:manipulation}
   background:var(--rose-soft);border-radius:5px;padding:1px 7px
 }
 .distGames{font-size:9px;color:var(--faint);margin-top:3px}
-.distIcons{display:flex;align-items:center;gap:2px;padding:6px 8px 9px}
+.distIcons{display:flex;align-items:center;gap:1px;padding:6px 6px 7px}
 .iconBtn{
-  flex:1;height:34px;border:0;background:transparent;border-radius:7px;
-  display:grid;place-items:center;font-size:15px
+  flex:1;height:32px;border:0;background:transparent;border-radius:7px;
+  display:grid;place-items:center;font-size:13.5px
 }
 .indiv-add-btn{
-  flex:none;width:26px;height:34px;border:1px dashed var(--line);background:var(--surface2);
-  border-radius:7px;font-size:12px;color:var(--accent);display:grid;place-items:center
+  flex:none;width:22px;height:32px;border:1px dashed var(--line);background:var(--surface2);
+  border-radius:7px;font-size:11px;color:var(--accent);display:grid;place-items:center
 }
 .iconBtn.off{opacity:.3;filter:grayscale(1)}
 .expandBtn{
-  flex:none;width:34px;height:34px;border:1px solid var(--line);background:var(--surface2);
-  border-radius:7px;display:grid;place-items:center;font-size:13px;color:var(--accent)
+  flex:none;width:30px;height:32px;border:1px solid var(--line);background:var(--surface2);
+  border-radius:7px;display:grid;place-items:center;font-size:12px;color:var(--accent)
 }
+
+.rom-chip-row{display:flex;flex-wrap:wrap;gap:5px;padding:0 8px 9px}
+.rom-chip{
+  border:1px solid var(--line);background:var(--surface2);border-radius:12px;
+  padding:5px 11px;font-size:10px;color:var(--muted)
+}
+.rom-chip.on{background:var(--accent-soft);border-color:#c9d9e1;color:#3f5a6b;font-weight:650}
+.rom-chip-empty{font-size:9.5px;color:var(--faint);padding:5px 2px}
 
 .distDetail{display:none;border-top:1px solid var(--line2);padding:12px;background:var(--surface2)}
 .distItem.open .distDetail{display:block}
@@ -334,6 +342,23 @@ button,label{touch-action:manipulation}
     return (...args)=>{ clearTimeout(timer); timer=setTimeout(()=>fn(...args), wait); };
   }
 
+  const GAME_ID_MAP = {
+    'ダイヤモンド':'diamond','パール':'pearl','プラチナ':'platinum',
+    'ハートゴールド':'heartgold','ソウルシルバー':'soulsilver',
+    'ブラック':'black','ホワイト':'white','ブラック2':'black2','ホワイト2':'white2',
+    'X':'x','Y':'y','オメガルビー':'omega-ruby','アルファサファイア':'alpha-sapphire',
+    'サン':'sun','ムーン':'moon','ウルトラサン':'ultra-sun','ウルトラムーン':'ultra-moon'
+  };
+  let allRoms = []; // 登録済みROM一覧([{romId, name, base, active}, ...])
+
+  // その配布ポケモンが対応しているソフトに、実際に登録されているROMだけを抽出する
+  function getCompatibleRoms(compatibleGames){
+    return allRoms.filter(rom=>{
+      const gameId = GAME_ID_MAP[rom.base];
+      return gameId && compatibleGames.includes(gameId);
+    });
+  }
+
   const GAME_LABELS = {
     diamond:'ダイヤモンド', pearl:'パール', platinum:'プラチナ',
     heartgold:'ハートゴールド', soulsilver:'ソウルシルバー',
@@ -373,6 +398,7 @@ button,label{touch-action:manipulation}
     }
     const saved = await idbGet('distributionState');
     eventState = saved || {};
+    allRoms = (await idbGet('romList')) || [];
     buildGameFilterChips();
     renderList();
   }
@@ -474,6 +500,11 @@ button,label{touch-action:manipulation}
         </div>`;
     return stArr.map((st, i)=>{
       const idxLabel = (i>0) ? `<span class="indiv-idx-badge">${toCircledNumber(i+1)}</span>` : '';
+      const compatibleRoms = getCompatibleRoms(e.compatibleGames);
+      const ownedRomIds = new Set(st.romIds || []);
+      const romChipsHtml = compatibleRoms.length
+        ? compatibleRoms.map(rom=>`<button class="rom-chip ${ownedRomIds.has(rom.romId)?'on':''}" data-rom-id="${rom.romId}">${rom.name}</button>`).join('')
+        : `<span class="rom-chip-empty">対応ソフトが登録されていません</span>`;
       return `
       <div class="distItem" data-event-id="${e.eventId}" data-indiv-index="${i}">
         <div class="distRow">
@@ -485,11 +516,14 @@ button,label{touch-action:manipulation}
           <button class="iconBtn status-btn ${st.owned?'':'off'}" title="所持">${st.owned?'✅':'➖'}</button>
           <button class="iconBtn shiny-btn ${st.shiny?'':'off'}" title="色違い">✨</button>
           <button class="iconBtn home-btn ${st.home?'':'off'}" title="HOME移送対象">🏠</button>
+          <button class="iconBtn shifter-btn ${st.shifter?'':'off'}" title="BWへ移送">🏹</button>
+          <button class="iconBtn mover-btn ${st.mover?'':'off'}" title="ポケムーバー通過">📤</button>
           <button class="iconBtn card-btn ${st.hasCard?'':'off'}" title="ふしぎなおくりものカードを保存しているか">💌</button>
           <button class="iconBtn received-btn ${st.received?'':'off'}" title="実際に受け取り済みか">🤝</button>
           <button class="indiv-add-btn" title="この配布ポケモンをもう1匹追加">+</button>
           <button class="expandBtn">👇</button>
         </div>
+        <div class="rom-chip-row">${romChipsHtml}</div>
         ${detailHtml}
       </div>
     `;
@@ -559,6 +593,20 @@ button,label{touch-action:manipulation}
       saveStateDebounced();
       return;
     }
+    const shifterBtn = e.target.closest('.shifter-btn');
+    if(shifterBtn){
+      const cur = updateIndivState(eventId, indivIndex, s=>{ s.shifter = !s.shifter; });
+      shifterBtn.classList.toggle('off', !cur.shifter);
+      saveStateDebounced();
+      return;
+    }
+    const moverBtn = e.target.closest('.mover-btn');
+    if(moverBtn){
+      const cur = updateIndivState(eventId, indivIndex, s=>{ s.mover = !s.mover; });
+      moverBtn.classList.toggle('off', !cur.mover);
+      saveStateDebounced();
+      return;
+    }
     const cardBtn = e.target.closest('.card-btn');
     if(cardBtn){
       const cur = updateIndivState(eventId, indivIndex, s=>{ s.hasCard = !s.hasCard; });
@@ -580,6 +628,18 @@ button,label{touch-action:manipulation}
       eventState[eventId] = arr;
       saveStateDebounced();
       renderList(); // 個体数が変わったので該当種の行を再描画する
+      return;
+    }
+    const romChip = e.target.closest('.rom-chip');
+    if(romChip){
+      const romId = romChip.dataset.romId;
+      const cur = updateIndivState(eventId, indivIndex, s=>{
+        if(!s.romIds) s.romIds = [];
+        const idx = s.romIds.indexOf(romId);
+        if(idx>=0) s.romIds.splice(idx,1); else s.romIds.push(romId);
+      });
+      romChip.classList.toggle('on', cur.romIds && cur.romIds.includes(romId));
+      saveStateDebounced();
       return;
     }
     const expandBtn = e.target.closest('.expandBtn');

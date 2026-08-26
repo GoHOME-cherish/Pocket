@@ -128,10 +128,13 @@ button{cursor:pointer}
 .filter{
   flex:0 0 auto;min-width:36px;height:31px;border:1px solid var(--line);
   border-radius:7px;background:transparent;padding:0 9px;font-size:13px;
+  transition:transform .12s ease
 }
 .filter.active{background:var(--accent-soft);border-color:#cddbe3;color:#4f6c7d}
+.filter.bulk-done{box-shadow:inset 0 0 0 2px var(--rose)}
+.filters-hint{font-size:8.5px;color:var(--faint);margin:5px 2px 10px;line-height:1.6}
 .dex-head,.dex-row{
-  display:grid;grid-template-columns:32px 30px minmax(56px,1fr) repeat(calc(var(--flag-cols,4) - 1),40px) 40px;
+  display:grid;grid-template-columns:28px 28px minmax(72px,1fr) repeat(calc(var(--flag-cols,4) - 1),36px) 36px;
   align-items:center;column-gap:1px;
 }
 .dex-head{
@@ -145,17 +148,17 @@ button{cursor:pointer}
 .no{font-family:var(--mono);font-size:9px;color:var(--faint)}
 .pname{font-size:13px;font-weight:620;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:2px}
 .pname .indiv-idx{font-size:11px;color:var(--rose);font-weight:700;margin-left:1px}
-.pname-wrap{display:flex;align-items:center;gap:3px;min-width:0;overflow:hidden}
+.pname-wrap{display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden}
 .indiv-add-btn{
-  flex:none;width:18px;height:18px;border:1px solid var(--line);background:var(--surface2);
-  border-radius:5px;font-size:10px;color:var(--accent);display:grid;place-items:center;line-height:1;padding:0
+  flex:none;width:15px;height:15px;border:1px solid var(--line);background:var(--surface2);
+  border-radius:4px;font-size:9px;color:var(--accent);display:grid;place-items:center;line-height:1;padding:0
 }
 .indiv-add-btn:active{background:var(--accent-soft)}
 .cellbtn{
-  width:40px;height:44px;border:0;background:transparent;border-radius:7px;
+  width:36px;height:44px;border:0;background:transparent;border-radius:7px;
   display:grid;place-items:center;font-size:14px;padding:0
 }
-.cellbtn.fav-lead{width:32px}
+.cellbtn.fav-lead{width:28px}
 .cellbtn.off{opacity:.25;filter:grayscale(1)}
 .cellbtn.status.absent{opacity:.45}
 .cellbtn:active{background:var(--surface2)}
@@ -417,9 +420,9 @@ button{cursor:pointer}
   .rom-name{font-size:23px}
   .counter{font-size:8px}
   .counter b{font-size:10px}
-  .dex-head,.dex-row{grid-template-columns:28px 26px minmax(48px,1fr) repeat(calc(var(--flag-cols,4) - 1),36px) 36px}
-  .cellbtn{width:36px;height:44px}
-  .cellbtn.fav-lead{width:28px}
+  .dex-head,.dex-row{grid-template-columns:26px 26px minmax(64px,1fr) repeat(calc(var(--flag-cols,4) - 1),32px) 32px}
+  .cellbtn{width:32px;height:44px}
+  .cellbtn.fav-lead{width:26px}
   .details{padding-left:28px}
 }
 
@@ -697,6 +700,7 @@ button{cursor:pointer}
       <button class="filter" data-f="shiny">✨</button>
       <button class="filter" data-f="home">🏠</button>
     </div>
+    <div class="filters-hint">💡 ✅➖🩷✨🏠を長押しすると、今表示中の行に一括で設定できます</div>
 
     <div class="focusbar" id="focusbar"><span id="focus-label">🔍 表示中</span><button id="clear-focus">×</button></div>
 
@@ -1160,23 +1164,25 @@ button{cursor:pointer}
     </div>`;
   }
 
-  function buildDexItem(no, name, transferCols, indivIndex){
+  function buildDexItem(no, name, transferCols, indivIndex, uniqueKey){
     const article=document.createElement('article');
     article.className='dex-item';
     article.dataset.no=no; article.dataset.name=name; article.dataset.indivIndex=indivIndex||1;
+    article.dataset.uniqueKey = uniqueKey || no;
     article.dataset.status='absent'; article.dataset.favorite='0'; article.dataset.shiny='0'; article.dataset.home='0';
     article.innerHTML = dexRowHtml(no,name,transferCols,indivIndex) + '<div class="details-slot"></div>';
     return article;
   }
 
   // 1種分のコンテナを作る。既定では1個体(1行)だが、count>1なら複数行(ナエトル②③...)を生成する。
-  function buildDexSpecies(no, name, transferCols, count){
+  // uniqueKey: 地方図鑑と全国図鑑をまたいで種を一意に識別するためのキー(通常は全国図鑑番号ベース)
+  function buildDexSpecies(no, name, transferCols, count, uniqueKey){
     const wrap = document.createElement('div');
     wrap.className = 'dex-species';
-    wrap.dataset.no = no; wrap.dataset.name = name;
+    wrap.dataset.no = no; wrap.dataset.name = name; wrap.dataset.uniqueKey = uniqueKey || no;
     const n = count && count>0 ? count : 1;
     for(let i=1; i<=n; i++){
-      wrap.appendChild(buildDexItem(no, name, transferCols, i));
+      wrap.appendChild(buildDexItem(no, name, transferCols, i, uniqueKey));
     }
     return wrap;
   }
@@ -1313,10 +1319,12 @@ button{cursor:pointer}
     if(!currentRomId) return;
     const items = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const stateMap = {};
+    const MAX_INDIVIDUALS = 20;
     items.forEach(item=>{
-      const no = item.dataset.no;
-      if(!stateMap[no]) stateMap[no] = [];
-      stateMap[no].push(extractDexItemState(item));
+      const key = item.dataset.uniqueKey || item.dataset.no;
+      if(!stateMap[key]) stateMap[key] = [];
+      if(stateMap[key].length >= MAX_INDIVIDUALS) return; // 異常増殖の保存自体も防ぐ
+      stateMap[key].push(extractDexItemState(item));
     });
     const ok = await idbSet('dexState:'+currentRomId, stateMap);
     dlog(`saveDexState完了: romId=${currentRomId} ok=${ok}`);
@@ -1333,17 +1341,25 @@ button{cursor:pointer}
     const speciesWraps = $$('#regional-dex-container .dex-species, #dex-national .dex-species');
     speciesWraps.forEach(speciesEl=>{
       const no = speciesEl.dataset.no;
-      let states = stateMap[no];
+      const key = speciesEl.dataset.uniqueKey || no;
+      // uniqueKeyでの保存データを優先しつつ、旧バージョン(noキーのみ)で保存されたデータも救済的に読む
+      let states = stateMap[key] !== undefined ? stateMap[key] : stateMap[no];
       if(!states) return;
       // 旧形式(単一オブジェクト)は配列に変換して扱う
       if(!Array.isArray(states)) states = [states];
       if(!states.length) return;
+      // 異常なデータ(過去の不具合等)による無制限増殖を防ぐための安全上限
+      const MAX_INDIVIDUALS = 20;
+      if(states.length > MAX_INDIVIDUALS){
+        console.warn(`${key} の保存個体数が異常に多いため(${states.length}件)、先頭${MAX_INDIVIDUALS}件のみ復元します`);
+        states = states.slice(0, MAX_INDIVIDUALS);
+      }
       // 保存件数ぶん、行が足りなければ追加で生成する
       const transferCols = !!speciesEl.querySelector('.transfer-toggle');
       while(speciesEl.querySelectorAll('.dex-item').length < states.length){
         const nextIndex = speciesEl.querySelectorAll('.dex-item').length + 1;
         const name = speciesEl.dataset.name;
-        speciesEl.appendChild(buildDexItem(no, name, transferCols, nextIndex));
+        speciesEl.appendChild(buildDexItem(no, name, transferCols, nextIndex, key));
       }
       const items = speciesEl.querySelectorAll('.dex-item');
       states.forEach((state, i)=>{
@@ -1372,7 +1388,8 @@ button{cursor:pointer}
         const frag = document.createDocumentFragment();
         group.dex.forEach(sp=>{
           const no=String(sp.localNo).padStart(3,'0');
-          frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
+          const uniqueKey = 'nat-'+sp.nationalNo;
+          frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1, uniqueKey));
         });
         section.appendChild(frag);
         container.appendChild(head);
@@ -1392,7 +1409,8 @@ button{cursor:pointer}
       const frag = document.createDocumentFragment();
       currentDexData.regionalDex.forEach(sp=>{
         const no=String(sp.localNo).padStart(3,'0');
-        frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
+        const uniqueKey = 'nat-'+sp.nationalNo;
+        frag.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1, uniqueKey));
       });
       section.appendChild(frag);
       container.appendChild(head);
@@ -1405,7 +1423,8 @@ button{cursor:pointer}
     const frag2=document.createDocumentFragment();
     currentDexData.nationalOnly.forEach(sp=>{
       const no=String(sp.nationalNo).padStart(3,'0');
-      frag2.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1));
+      const uniqueKey = 'nat-'+sp.nationalNo;
+      frag2.appendChild(buildDexSpecies(no, sp.nameJa, TRANSFER_COLS, 1, uniqueKey));
     });
     natWrap.appendChild(frag2);
     const natCount = $('#national-count');
@@ -1417,13 +1436,14 @@ button{cursor:pointer}
   function updateCounter(){
     const all = $$('#regional-dex-container .dex-item, #dex-national .dex-item');
     const owned = all.filter(i=>i.dataset.status==='owned');
-    // 種数は重複を除いたユニークなNo.の数、匹数は行の総数(複数個体を含む)で数える
-    const uniqueNos = new Set(all.map(i=>i.dataset.no));
-    const ownedUniqueNos = new Set(owned.map(i=>i.dataset.no));
-    const duplicateCount = all.length - uniqueNos.size;
+    // 種数は「同じ種(全国図鑑番号ベース)」を1として数え、匹数は行の総数(複数個体を含む)で数える。
+    // 地方図鑑の localNo だけでは、地方図鑑と全国図鑑の間で番号が重複するため、data-unique-key を使う。
+    const uniqueKeys = new Set(all.map(i=>i.dataset.uniqueKey || i.dataset.no));
+    const ownedUniqueKeys = new Set(owned.map(i=>i.dataset.uniqueKey || i.dataset.no));
+    const duplicateCount = all.length - uniqueKeys.size;
     const counterEl = $('.counter');
     if(counterEl){
-      counterEl.innerHTML = `<b>${ownedUniqueNos.size}</b>/${uniqueNos.size}種<br><b>${owned.length}</b>匹 · 重複 <b>${duplicateCount}</b>`;
+      counterEl.innerHTML = `<b>${ownedUniqueKeys.size}</b>/${uniqueKeys.size}種<br><b>${owned.length}</b>匹 · 重複 <b>${duplicateCount}</b>`;
     }
   }
 
@@ -1518,10 +1538,11 @@ button{cursor:pointer}
         if(speciesEl){
           const no = speciesEl.dataset.no;
           const name = speciesEl.dataset.name;
+          const uniqueKey = speciesEl.dataset.uniqueKey;
           const existing = speciesEl.querySelectorAll('.dex-item');
           const nextIndex = existing.length + 1;
           const transferCols = !!speciesEl.querySelector('.transfer-toggle');
-          const newItem = buildDexItem(no, name, transferCols, nextIndex);
+          const newItem = buildDexItem(no, name, transferCols, nextIndex, uniqueKey);
           speciesEl.appendChild(newItem);
           saveDexStateDebounced();
           toast(`${name}${toCircledNumber(nextIndex)} を追加しました`);
@@ -1810,6 +1831,77 @@ button{cursor:pointer}
     }
     applyLocal();
   }));
+
+  // ===== クイックフィルターの長押しで一括ON/OFF =====
+  // 「今、絞り込みで表示されている行」全てに対して、長押ししたボタンの状態を一括で切り替える。
+  function bulkApplyFilter(filterKey, turnOn){
+    const visibleItems = $$('#regional-dex-container .dex-item, #dex-national .dex-item')
+      .filter(item=>item.style.display!=='none');
+    if(!visibleItems.length){ toast('対象の行がありません'); return; }
+    visibleItems.forEach(item=>{
+      if(filterKey==='owned'){
+        item.dataset.status = turnOn ? 'owned' : 'absent';
+        const statusBtn = item.querySelector('.status');
+        if(statusBtn){
+          statusBtn.textContent = turnOn ? '✅' : '➖';
+          statusBtn.classList.toggle('absent', !turnOn);
+        }
+      } else if(filterKey==='absent'){
+        item.dataset.status = turnOn ? 'absent' : 'owned';
+        const statusBtn = item.querySelector('.status');
+        if(statusBtn){
+          statusBtn.textContent = turnOn ? '➖' : '✅';
+          statusBtn.classList.toggle('absent', turnOn);
+        }
+      } else if(filterKey==='favorite'){
+        item.dataset.favorite = turnOn ? '1' : '0';
+        const favBtn = item.querySelector('.fav-lead');
+        if(favBtn) favBtn.classList.toggle('off', !turnOn);
+      } else if(filterKey==='shiny' || filterKey==='home'){
+        item.dataset[filterKey] = turnOn ? '1' : '0';
+        const row = item.querySelector('.dex-row');
+        const cellBtns = row ? Array.from(row.querySelectorAll('.cellbtn')) : [];
+        const idx = filterKey==='shiny' ? 2 : 3;
+        if(cellBtns[idx]){
+          cellBtns[idx].classList.toggle('off', !turnOn);
+          cellBtns[idx].textContent = turnOn ? (filterKey==='shiny'?'✨':'🏠') : '☑️';
+        }
+      }
+    });
+    updateCounter();
+    saveDexStateDebounced();
+    const labelMap = {owned:'✅ 所持', absent:'➖ 未所持', favorite:'🩷 お気に入り', shiny:'✨ 色違い', home:'🏠 HOME対象'};
+    toast(`表示中の${visibleItems.length}件を「${labelMap[filterKey]}」に${turnOn?'一括設定':'一括解除'}しました`);
+  }
+
+  let bulkPressTimer = null;
+  let bulkPressTriggered = false;
+  $$('.filter').forEach(btn=>{
+    if(btn.dataset.f==='all') return; // 「すべて」は一括操作の対象外
+    const start = ()=>{
+      bulkPressTriggered = false;
+      bulkPressTimer = setTimeout(()=>{
+        bulkPressTriggered = true;
+        const turnOn = !btn.classList.contains('bulk-done');
+        if(confirm(`表示中の行を全て「${btn.textContent}」に${turnOn?'まとめて設定':'まとめて解除'}しますか？`)){
+          bulkApplyFilter(btn.dataset.f, turnOn);
+          btn.classList.toggle('bulk-done', turnOn);
+        }
+      }, 550);
+    };
+    const cancel = ()=>{ clearTimeout(bulkPressTimer); };
+    btn.addEventListener('touchstart', start, {passive:true});
+    btn.addEventListener('touchend', cancel);
+    btn.addEventListener('touchmove', cancel);
+    btn.addEventListener('touchcancel', cancel);
+    btn.addEventListener('mousedown', start);
+    btn.addEventListener('mouseup', cancel);
+    btn.addEventListener('mouseleave', cancel);
+    // 長押しが発火した直後の通常クリックは、絞り込みトグルとして誤発火させない
+    btn.addEventListener('click', e=>{
+      if(bulkPressTriggered){ e.stopImmediatePropagation(); bulkPressTriggered=false; }
+    }, true);
+  });
 
   // Global search demo and result jump/highlight.
   const gfSet = new Set();
