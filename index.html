@@ -2104,13 +2104,19 @@ button{cursor:pointer}
         playthroughMemos[key.slice('playthroughMemo:'.length)] = await idbGet(key);
       }
     }
+    const distributionState = (await idbGet('distributionState')) || {};
+    const taskState = (await idbGet('taskState')) || {};
+    const theme = (await idbGet('theme')) || 'light';
     return {
       app: 'GoHOME cherish',
       exportedAt: new Date().toISOString(),
-      version: 2,
+      version: 3,
       romList,
       dexStates,
-      playthroughMemos
+      playthroughMemos,
+      distributionState,
+      taskState,
+      theme
     };
   }
 
@@ -2281,6 +2287,9 @@ button{cursor:pointer}
       for(const romId in (data.playthroughMemos||{})){
         await idbSet('playthroughMemo:'+romId, data.playthroughMemos[romId]);
       }
+      if(data.distributionState) await idbSet('distributionState', data.distributionState);
+      if(data.taskState) await idbSet('taskState', data.taskState);
+      if(data.theme) await idbSet('theme', data.theme);
       toast('読み込みました。ページを再読み込みします…');
       setTimeout(()=>location.reload(), 1200);
     }catch(err){
