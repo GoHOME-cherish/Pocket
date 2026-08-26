@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>タスク - GoHOME cherish</title>
+<style>
+:root{
+  --bg:#f5f4f1;
+  --surface:#fbfaf7;
+  --surface2:#efeeea;
+  --text:#323437;
+  --muted:#777b7f;
+  --faint:#a5a8aa;
+  --line:#deddd8;
+  --line2:#e8e7e2;
+  --accent:#627f91;
+  --accent-soft:#e8eff3;
+  --rose:#a96f7c;
+  --rose-soft:#f3e8eb;
+  --danger:#a66b6b;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic","Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --bg:#1c1d1f;
+  --surface:#26282b;
+  --surface2:#2e3033;
+  --text:#eceded;
+  --muted:#a3a7ab;
+  --faint:#787c80;
+  --line:#3c3e41;
+  --line2:#333537;
+  --accent:#8fb2c7;
+  --accent-soft:#2c3a42;
+  --rose:#d99cab;
+  --rose-soft:#3a2c31;
+  --danger:#e08b7a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+button,input,select{font:inherit;color:inherit}
+button{touch-action:manipulation}
+
+.topbar{
+  position:sticky;top:0;z-index:30;height:52px;
+  display:grid;grid-template-columns:44px 1fr 44px;align-items:center;
+  padding-top:env(safe-area-inset-top);
+  background:rgba(245,244,241,.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.top-action{
+  width:36px;height:36px;margin:auto;border:0;background:transparent;
+  display:grid;place-items:center;font-size:18px;border-radius:8px;text-decoration:none;color:inherit
+}
+.top-action:active{background:var(--surface2)}
+.brand{text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:.08em;font-weight:650}
+.main{max-width:520px;margin:0 auto;padding:16px 16px 60px}
+
+.pt-note{
+  font-size:9.5px;color:var(--faint);background:var(--surface2);border-radius:8px;padding:9px 11px;
+  margin-bottom:16px;line-height:1.7
+}
+
+.countdown-card{
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:18px 16px;margin-bottom:18px;text-align:center
+}
+.countdown-label{font-size:10.5px;color:var(--muted);margin-bottom:8px}
+.countdown-value{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.01em;color:var(--accent)}
+.countdown-sub{font-size:9px;color:var(--faint);margin-top:6px}
+
+.pt-block{border-bottom:1px solid var(--line2);padding-bottom:16px;margin-bottom:16px}
+.pt-block:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.pt-block-title{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+
+.route-input-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.route-input-row .label{flex:1;font-size:11.5px}
+.route-input-row .label small{display:block;font-size:9px;color:var(--faint);margin-top:2px}
+.route-input-row input{
+  width:64px;flex:none;border:1px solid var(--line);border-radius:7px;padding:8px 6px;
+  font-size:12px;background:var(--surface);text-align:center;font-family:var(--mono)
+}
+.route-input-row .unit{font-size:10px;color:var(--faint);flex:none;width:28px}
+
+.count-input-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.count-input-row .label{flex:1;font-size:11.5px}
+.count-input-row .auto-value{font-size:9.5px;color:var(--faint)}
+.count-input-row input{
+  width:72px;flex:none;border:1px solid var(--line);border-radius:7px;padding:8px 6px;
+  font-size:12px;background:var(--surface);text-align:center;font-family:var(--mono)
+}
+.count-input-row .unit{font-size:10px;color:var(--faint);flex:none;width:24px}
+.reset-auto-btn{
+  flex:none;border:1px solid var(--line);background:var(--surface2);border-radius:7px;
+  padding:6px 9px;font-size:9.5px;color:var(--accent)
+}
+
+.route-result-card{
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:13px 14px;margin-bottom:10px
+}
+.route-result-title{font-size:11.5px;font-weight:700;margin-bottom:9px}
+.route-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.route-result-item .k{font-size:9px;color:var(--faint);margin-bottom:2px}
+.route-result-item .v{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--accent)}
+.route-result-item .v small{font-size:9px;color:var(--muted);font-weight:500;font-family:var(--font)}
+.route-result-empty{font-size:10px;color:var(--faint);text-align:center;padding:6px 0}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="top-action" id="back-to-index" aria-label="図鑑にもどる">‹</a>
+  <div class="brand">タスク</div>
+  <span></span>
+</header>
+
+<main class="main">
+
+  <div class="pt-note">💡 『ポケモンバンク』サービス終了までの残り時間と、あなたが登録した移送ルートの所要時間から、引っ越し計画の目安を計算します。あくまで目安としてご利用ください。</div>
+
+  <div class="countdown-card">
+    <div class="countdown-label">『ポケモンバンク』サービス終了まで</div>
+    <div class="countdown-value" id="countdown-value">計算中…</div>
+    <div class="countdown-sub">2027年2月26日（金）12:00（日本時間）まで</div>
+  </div>
+
+  <!-- 移送ルートの所要時間 -->
+  <div class="pt-block">
+    <div class="pt-block-title">⏱ 移送1セットあたりの所要時間</div>
+    <div class="route-input-row">
+      <div class="label">ポケシフター<small>6体を移送するのにかかる時間</small></div>
+      <input type="number" id="time-shifter" inputmode="numeric" placeholder="0">
+      <div class="unit">分</div>
+    </div>
+    <div class="route-input-row">
+      <div class="label">ポケムーバー<small>ボックス整理にかかる時間</small></div>
+      <input type="number" id="time-mover" inputmode="numeric" placeholder="0">
+      <div class="unit">分</div>
+    </div>
+    <div class="route-input-row">
+      <div class="label">ポケモンバンク<small>ボックス整理→HOME移動にかかる時間</small></div>
+      <input type="number" id="time-bank" inputmode="numeric" placeholder="0">
+      <div class="unit">分</div>
+    </div>
+  </div>
+
+  <!-- 対象の匹数 -->
+  <div class="pt-block">
+    <div class="pt-block-title">🔢 各工程がまだ必要な匹数</div>
+    <div class="count-input-row">
+      <div class="label">ポケシフターが必要<div class="auto-value" id="auto-shifter-label"></div></div>
+      <input type="number" id="count-shifter" inputmode="numeric" placeholder="0">
+      <div class="unit">匹</div>
+    </div>
+    <div class="count-input-row">
+      <div class="label">ポケムーバーが必要<div class="auto-value" id="auto-mover-label"></div></div>
+      <input type="number" id="count-mover" inputmode="numeric" placeholder="0">
+      <div class="unit">匹</div>
+    </div>
+    <div class="count-input-row">
+      <div class="label">ポケモンバンクが必要<div class="auto-value" id="auto-bank-label"></div></div>
+      <input type="number" id="count-bank" inputmode="numeric" placeholder="0">
+      <div class="unit">匹</div>
+    </div>
+    <button class="reset-auto-btn" id="reset-auto-btn">↺ 自動集計の数値に戻す</button>
+  </div>
+
+  <!-- 算出結果 -->
+  <div class="pt-block">
+    <div class="pt-block-title">📊 計画の目安</div>
+    <div id="route-results"></div>
+  </div>
+
+</main>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+
+  // ===== IndexedDB (index.html/distribution.html/playthrough.htmlと共有) =====
+  const DB_NAME = 'gohome_cherish_db';
+  const DB_VERSION = 1;
+  const STORE_NAME = 'kv';
+  let dbInstance = null;
+  let dbPromise = null;
+
+  function openDb(){
+    if(dbInstance) return Promise.resolve(dbInstance);
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      if(!window.indexedDB){ reject(new Error('IndexedDB非対応のブラウザです')); return; }
+      let settled = false;
+      const timeoutId = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        dbPromise = null;
+        reject(new Error('IndexedDB接続がタイムアウトしました'));
+      }, 3000);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+      };
+      req.onsuccess = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbInstance = e.target.result;
+        dbInstance.onversionchange = ()=>{ if(dbInstance){ dbInstance.close(); dbInstance = null; } };
+        resolve(dbInstance);
+      };
+      req.onerror = (e)=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbPromise = null;
+        reject(e.target.error);
+      };
+      req.onblocked = ()=>{ /* タイムアウトに任せる */ };
+    });
+    return dbPromise;
+  }
+  function runIdbTransaction(db, mode, operation, timeoutMs=1800){
+    return new Promise((resolve, reject)=>{
+      let settled = false;
+      const timer = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        reject(new Error('IndexedDB transaction timeout'));
+      }, timeoutMs);
+      const tx = db.transaction(STORE_NAME, mode);
+      tx.oncomplete = ()=>{ if(settled) return; settled=true; clearTimeout(timer); resolve(result); };
+      tx.onerror = (e)=>{ if(settled) return; settled=true; clearTimeout(timer); reject(e.target.error); };
+      tx.onabort = (e)=>{ if(settled) return; settled=true; clearTimeout(timer); reject(e.target.error || new Error('transaction aborted')); };
+      let result;
+      try{
+        result = operation(tx.objectStore(STORE_NAME));
+      }catch(err){
+        if(!settled){ settled=true; clearTimeout(timer); reject(err); }
+      }
+    });
+  }
+  async function idbGet(key){
+    try{
+      const db = await openDb();
+      return await runIdbTransaction(db, 'readonly', store=>{
+        return new Promise((resolve, reject)=>{
+          const req = store.get(key);
+          req.onsuccess = ()=> resolve(req.result);
+          req.onerror = (e)=> reject(e.target.error);
+        });
+      });
+    }catch(err){ console.error('idbGet失敗', key, err); return undefined; }
+  }
+  async function idbSet(key, value){
+    try{
+      const db = await openDb();
+      await runIdbTransaction(db, 'readwrite', store=>{ store.put(value, key); });
+      return true;
+    }catch(err){ console.error('idbSet失敗', key, err); return false; }
+  }
+  async function closeDbConnection(){
+    try{ if(dbInstance){ dbInstance.close(); } }catch(e){}
+    dbInstance = null; dbPromise = null;
+  }
+
+  // ===== テーマ復元 =====
+  (async ()=>{
+    const theme = await idbGet('theme');
+    if(theme) document.documentElement.setAttribute('data-theme', theme);
+  })();
+
+  // ===== カウントダウン =====
+  const DEADLINE = new Date('2027-02-26T12:00:00+09:00').getTime();
+  function updateCountdown(){
+    const now = Date.now();
+    const diff = DEADLINE - now;
+    const el = $('#countdown-value');
+    if(diff <= 0){ el.textContent = 'サービス終了しました'; return diff; }
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    el.textContent = `${days}日 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+    return diff;
+  }
+  let remainingMs = updateCountdown();
+  setInterval(()=>{ remainingMs = updateCountdown(); recalcResults(); }, 1000);
+
+  // ===== 自動集計(全ROM横断、✅所持数から🏹📤済を差し引く) =====
+  let autoCounts = { shifter: 0, mover: 0, bank: 0 };
+
+  async function computeAutoCounts(){
+    const romList = (await idbGet('romList')) || [];
+    let totalOwned = 0, shifterDone = 0, moverDone = 0;
+    for(const rom of romList){
+      const stateMap = await idbGet('dexState:'+rom.romId);
+      if(!stateMap) continue;
+      Object.values(stateMap).forEach(arr=>{
+        const states = Array.isArray(arr) ? arr : [arr];
+        states.forEach(st=>{
+          if(!st) return;
+          if(st.status==='owned'){
+            totalOwned++;
+            if(st.transfers && st.transfers['🏹']) shifterDone++;
+            if(st.transfers && st.transfers['📤']) moverDone++;
+          }
+        });
+      });
+    }
+    // シフター工程:所持のうちまだシフターを経ていない数
+    // ムーバー工程:所持のうちまだムーバーを経ていない数
+    // バンク工程: 現状は「まだバンクを経ていない数」の判定材料が無いため、所持数をそのまま使う
+    autoCounts = {
+      shifter: Math.max(0, totalOwned - shifterDone),
+      mover: Math.max(0, totalOwned - moverDone),
+      bank: totalOwned
+    };
+  }
+
+  function applyAutoCountsToInputs(){
+    $('#count-shifter').value = autoCounts.shifter;
+    $('#count-mover').value = autoCounts.mover;
+    $('#count-bank').value = autoCounts.bank;
+    $('#auto-shifter-label').textContent = `自動集計: ${autoCounts.shifter}匹`;
+    $('#auto-mover-label').textContent = `自動集計: ${autoCounts.mover}匹`;
+    $('#auto-bank-label').textContent = `自動集計: ${autoCounts.bank}匹`;
+  }
+
+  $('#reset-auto-btn').addEventListener('click', ()=>{
+    applyAutoCountsToInputs();
+    saveTaskState();
+    recalcResults();
+  });
+
+  // ===== 入力値の保存・復元 =====
+  const INPUT_IDS = ['time-shifter','time-mover','time-bank','count-shifter','count-mover','count-bank'];
+  function saveTaskState(){
+    const state = {};
+    INPUT_IDS.forEach(id=>{ state[id] = $('#'+id).value; });
+    idbSet('taskState', state);
+  }
+  async function restoreTaskState(){
+    const state = await idbGet('taskState');
+    if(state){
+      INPUT_IDS.forEach(id=>{ if(state[id]!==undefined) $('#'+id).value = state[id]; });
+    }
+  }
+  INPUT_IDS.forEach(id=>{
+    $('#'+id).addEventListener('input', ()=>{ saveTaskState(); recalcResults(); });
+  });
+
+  // ===== 算出ロジック =====
+  function formatSets(n){
+    if(!isFinite(n) || n<0) return '―';
+    return Math.floor(n).toLocaleString('ja-JP');
+  }
+  function buildRouteResultHtml(title, perSetMinutes, countNeeded){
+    if(!perSetMinutes || perSetMinutes<=0 || !countNeeded || countNeeded<=0){
+      return `<div class="route-result-card">
+        <div class="route-result-title">${title}</div>
+        <div class="route-result-empty">所要時間と匹数を入力すると計算されます</div>
+      </div>`;
+    }
+    const remainingMinutes = Math.max(0, remainingMs / 60000);
+    const remainingDays = Math.max(1/24, remainingMs / 86400000); // 0除算対策で最低1時間扱い
+    // 「上限」: 残り時間でこなせるセット数(1セット=perSetMinutes)
+    const maxSets = Math.floor(remainingMinutes / perSetMinutes);
+    // 「逆算」: 必要セット数(ここでは匹数をそのまま1セット扱いとし、6体まとめのシフターのみ6で割る)
+    const totalSetsNeeded = title.includes('シフター') ? Math.ceil(countNeeded/6) : countNeeded;
+    const setsPerDay = totalSetsNeeded / (remainingDays);
+    return `<div class="route-result-card">
+      <div class="route-result-title">${title}</div>
+      <div class="route-result-grid">
+        <div class="route-result-item">
+          <div class="k">残り時間でこなせる上限</div>
+          <div class="v">${formatSets(maxSets)}<small> セット</small></div>
+        </div>
+        <div class="route-result-item">
+          <div class="k">終わらせるのに必要なペース</div>
+          <div class="v">${formatSets(setsPerDay)}<small> セット/日</small></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function recalcResults(){
+    const tShifter = parseFloat($('#time-shifter').value) || 0;
+    const tMover = parseFloat($('#time-mover').value) || 0;
+    const tBank = parseFloat($('#time-bank').value) || 0;
+    const cShifter = parseFloat($('#count-shifter').value) || 0;
+    const cMover = parseFloat($('#count-mover').value) || 0;
+    const cBank = parseFloat($('#count-bank').value) || 0;
+
+    const fullRouteTime = tShifter + tMover + tBank;
+    const fullRouteCount = Math.max(cShifter, cMover, cBank); // 最初の工程が必要な数を基準にする
+    const moverBankTime = tMover + tBank;
+    const moverBankCount = Math.max(cMover, cBank);
+    const bankOnlyTime = tBank;
+    const bankOnlyCount = cBank;
+
+    const html = [
+      buildRouteResultHtml('シフター → ムーバー → バンク', fullRouteTime, fullRouteCount),
+      buildRouteResultHtml('ムーバー → バンク', moverBankTime, moverBankCount),
+      buildRouteResultHtml('バンクのみ', bankOnlyTime, bankOnlyCount),
+    ].join('');
+    $('#route-results').innerHTML = html;
+  }
+
+  // ===== 初期化 =====
+  async function initApp(){
+    await computeAutoCounts();
+    await restoreTaskState();
+    // 保存済みの匹数入力が無い場合は自動集計値を初期表示する
+    if(!$('#count-shifter').value) applyAutoCountsToInputs();
+    else{
+      $('#auto-shifter-label').textContent = `自動集計: ${autoCounts.shifter}匹`;
+      $('#auto-mover-label').textContent = `自動集計: ${autoCounts.mover}匹`;
+      $('#auto-bank-label').textContent = `自動集計: ${autoCounts.bank}匹`;
+    }
+    recalcResults();
+  }
+  initApp();
+
+  // ===== 戻る（保存→DB切断→遷移） =====
+  const backLink = $('#back-to-index');
+  if(backLink){
+    backLink.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      saveTaskState();
+      await closeDbConnection();
+      await new Promise(r=>setTimeout(r, 150));
+      location.href = 'index.html';
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
