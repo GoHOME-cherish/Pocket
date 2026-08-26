@@ -142,11 +142,6 @@ button{cursor:pointer}
   font-size:8px;color:var(--faint)
 }
 .dex-head span:nth-child(n+4){text-align:center}
-/* 図鑑本体側の通常の見出し行は非表示にし、画面上部のスティッキー見出しだけを表示する */
-#regional-dex-container > .dex-head,
-.national-dex > .dex-head{
-  display:none;
-}
 .dex-row{
   min-height:48px;border-bottom:1px solid var(--line2);
 }
@@ -345,6 +340,7 @@ button{cursor:pointer}
 .chip.on{background:var(--accent-soft);border-color:#cddbe3;color:#4f6c7d;font-weight:650}
 .chip-group.inverted .chip.on{background:#fbe9e4;border-color:#e7b8ab;color:#b1614a}
 .sample-note{font-size:8px;color:var(--faint);line-height:1.5;padding:2px 2px 6px}
+.empty-note{font-size:11px;color:var(--muted);line-height:1.6;padding:20px 14px;text-align:center}
 .result{
   width:100%;border:0;border-bottom:1px solid var(--line2);background:transparent;
   padding:10px 14px;text-align:left
@@ -1908,28 +1904,209 @@ button{cursor:pointer}
     }, true);
   });
 
-  // Global search demo and result jump/highlight.
+  // ===== 全ROM横断検索：データ集約 =====
+  const gameDataCache = {}; // gameId -> data/{gameId}.json の中身をキャッシュ
+  let distEventsCache = null; // distribution_events.json のキャッシュ
+
+  async function fetchGameDataCached(gameId){
+    if(gameDataCache[gameId]) return gameDataCache[gameId];
+    try{
+      const res = await fetch(`data/${gameId}.json`);
+      if(!res.ok) throw new Error('fetch failed: '+res.status);
+      const data = await res.json();
+      gameDataCache[gameId] = data;
+      return data;
+    }catch(err){
+      dlog(`fetchGameDataCached失敗: gameId=${gameId} error=${err && err.message}`);
+      return null;
+    }
+  }
+
+  async function fetchDistEventsCached(){
+    if(distEventsCache) return distEventsCache;
+    try{
+      const res = await fetch('data/distribution_events.json');
+      if(!res.ok) throw new Error('fetch failed: '+res.status);
+      distEventsCache = await res.json();
+      return distEventsCache;
+    }catch(err){
+      dlog(`fetchDistEventsCached失敗: ${err && err.message}`);
+      return [];
+    }
+  }
+
+  // 図鑑JSON1本分の全種(regionalDex+nationalOnly)を、nationalNoの重複を除いて1本の配列にする
+  function allSpeciesOf(gameData){
+    const seen = new Set();
+    const list = [];
+    (gameData.regionalDex||[]).forEach(sp=>{
+      if(seen.has(sp.nationalNo)) return;
+      seen.add(sp.nationalNo);
+      list.push(sp);
+    });
+    (gameData.nationalOnly||[]).forEach(sp=>{
+      if(seen.has(sp.nationalNo)) return;
+      seen.add(sp.nationalNo);
+      list.push(sp);
+    });
+    return list;
+  }
+
+  // 登録済み全ROM＋配布図鑑を横断し、未所持/未受取も含めた全件の行データを返す
+  async function collectAllRecords(){
+    const records = [];
+    const roms = (await idbGet('romList')) || [];
+
+    for(const rom of roms){
+      const gameId = GAME_ID_MAP[rom.base];
+      if(!gameId) continue; // 未対応base(将来のVC対応等)は今回スキップ
+      const gameData = await fetchGameDataCached(gameId);
+      if(!gameData) continue;
+      const species = allSpeciesOf(gameData);
+      const stateMap = (await idbGet('dexState:'+rom.romId)) || {};
+
+      species.forEach(sp=>{
+        const key = String(sp.nationalNo); // uniqueKeyを使わない種は nationalNo をキーにする想定
+        let stArr = stateMap[key] || stateMap[String(sp.localNo)];
+        if(!stArr) stArr = [null]; // 記録なし = 未所持1件として扱う
+        if(!Array.isArray(stArr)) stArr = [stArr];
+        stArr.forEach((st, idx)=>{
+          records.push({
+            kind: 'dex',
+            romId: rom.romId,
+            romName: rom.name,
+            romBase: rom.base,
+            no: sp.localNo ?? null,
+            nationalNo: sp.nationalNo,
+            nameJa: sp.nameJa,
+            indivIndex: idx,
+            status: st ? (st.status||'absent') : 'absent',
+            favorite: st ? st.favorite==='1'||st.favorite===true : false,
+            shiny: st ? st.shiny==='1'||st.shiny===true : false,
+            home: st ? st.home==='1'||st.home===true : false,
+            transfers: st ? (st.transfers||{}) : {},
+            detailGroup: st ? (st.detailGroup||null) : null
+          });
+        });
+      });
+    }
+
+    const events = await fetchDistEventsCached();
+    const distState = (await idbGet('distributionState')) || {};
+    events.forEach(ev=>{
+      let stArr = distState[ev.eventId] || [null];
+      if(!Array.isArray(stArr)) stArr = [stArr];
+      stArr.forEach((st, idx)=>{
+        records.push({
+          kind: 'distribution',
+          eventId: ev.eventId,
+          nameJa: ev.nameJa,
+          commonNameJa: ev.commonNameJa,
+          compatibleGames: ev.compatibleGames,
+          indivIndex: idx,
+          favorite: st ? !!st.favorite : false,
+          status: st && st.owned ? 'owned' : 'absent',
+          shiny: st ? !!st.shiny : false,
+          home: st ? !!st.home : false,
+          shifter: st ? !!st.shifter : false,
+          mover: st ? !!st.mover : false,
+          hasCard: st ? !!st.hasCard : false,
+          received: st ? !!st.received : false
+        });
+      });
+    });
+
+    return records;
+  }
+
+  // ===== 全ROM横断検索：基本表示 =====
   const gfSet = new Set();
   const gsearch=$('#global-search');
-  function applyGlobal(){
-    const q=gsearch.value.trim().toLowerCase();
-    $$('.result').forEach(r=>{
-      const text=r.textContent.toLowerCase();
-      const icons=r.querySelector('.result-icons').textContent;
-      const okq=!q||text.includes(q);
-      const okf = gfSet.size===0 || [...gfSet].every(f=>
-        (f==='owned'&&icons.includes('✅'))
-        ||(f==='absent'&&icons.includes('➖'))
-        ||(f==='favorite'&&icons.includes('🩷'))
-        ||(f==='shiny'&&icons.includes('✨'))
-        ||(f==='home'&&icons.includes('🏠'))
-        ||(f==='bw'&&icons.includes('🏹'))
-        ||(f==='transporter'&&icons.includes('📤'))
-      );
-      r.style.display=okq&&okf?'':'none';
+  const globalResultsEl = $('#global-results');
+  let allRecordsCache = null; // collectAllRecords()の結果をこの検索セッション中だけ保持
+  let globalDataDirty = true; // ドロワーを開き直した時などに再集約させるフラグ
+
+  function recordMatchesQuery(rec, q){
+    if(!q) return true;
+    const hay = (rec.nameJa||'')+' '+(rec.commonNameJa||'')+' '+(rec.romName||'');
+    return hay.toLowerCase().includes(q);
+  }
+
+  function recordMatchesFilters(rec){
+    if(gfSet.size===0) return true;
+    return [...gfSet].every(f=>{
+      if(f==='owned') return rec.status==='owned';
+      if(f==='absent') return rec.status==='absent';
+      if(f==='favorite') return !!rec.favorite;
+      if(f==='shiny') return !!rec.shiny;
+      if(f==='home') return !!rec.home;
+      if(f==='bw') return rec.kind==='distribution' ? !!rec.shifter : !!(rec.transfers&&rec.transfers['🏹']);
+      if(f==='transporter') return rec.kind==='distribution' ? !!rec.mover : !!(rec.transfers&&rec.transfers['📤']);
+      return true;
     });
   }
+
+  function resultIconsHtml(rec){
+    const icons=[];
+    if(rec.favorite) icons.push('🩷');
+    icons.push(rec.status==='owned'?'✅':'➖');
+    if(rec.shiny) icons.push('✨');
+    if(rec.home) icons.push('🏠');
+    if(rec.kind==='distribution'){
+      if(rec.shifter) icons.push('🏹');
+      if(rec.mover) icons.push('📤');
+      if(rec.hasCard) icons.push('💌');
+      if(rec.received) icons.push('🤝');
+    }else{
+      if(rec.transfers&&rec.transfers['🏹']) icons.push('🏹');
+      if(rec.transfers&&rec.transfers['📤']) icons.push('📤');
+    }
+    return icons.join(' ');
+  }
+
+  function renderResultRow(rec){
+    const sub = rec.kind==='distribution'
+      ? `配布${rec.commonNameJa?'｜'+rec.commonNameJa:''}`
+      : `${rec.romName}｜No.${String(rec.no).padStart(3,'0')}`;
+    return `
+      <button class="result" data-kind="${rec.kind}" data-hit="${rec.kind==='distribution'?rec.eventId:rec.no}" data-romname="${rec.romName||''}">
+        <div class="result-main">
+          <strong>${rec.nameJa}</strong>
+          <span class="result-icons">${resultIconsHtml(rec)}</span>
+        </div>
+        <small>${sub}</small>
+      </button>`;
+  }
+
+  async function applyGlobal(){
+    const q=gsearch.value.trim().toLowerCase();
+    const hasFilter = gfSet.size>0;
+    if(!q && !hasFilter){
+      globalResultsEl.innerHTML = '<div class="empty-note">キーワードを入力するか、フィルターを選ぶと検索結果が表示されます。</div>';
+      return;
+    }
+    if(globalDataDirty || !allRecordsCache){
+      globalResultsEl.innerHTML = '<div class="empty-note">読み込み中…</div>';
+      allRecordsCache = await collectAllRecords();
+      globalDataDirty = false;
+    }
+    const MAX_SHOW = 300; // 一度に大量描画してブラウザが重くならないよう上限を設ける
+    const filtered = allRecordsCache.filter(rec=>recordMatchesQuery(rec,q)&&recordMatchesFilters(rec));
+    if(!filtered.length){
+      globalResultsEl.innerHTML = '<div class="empty-note">条件に合うポケモンが見つかりませんでした。</div>';
+      return;
+    }
+    const shown = filtered.slice(0, MAX_SHOW);
+    globalResultsEl.innerHTML = shown.map(renderResultRow).join('')
+      + (filtered.length>MAX_SHOW ? `<div class="empty-note">他 ${filtered.length-MAX_SHOW}件（絞り込むと表示されます）</div>` : '');
+  }
   gsearch.addEventListener('input',applyGlobal);
+  $('#right-toggle').addEventListener('change', e=>{
+    if(e.target.checked){
+      globalDataDirty = true; // 開くたびに最新のIndexedDB状態を反映する
+      applyGlobal();
+    }
+  });
   $$('[data-g]').forEach(btn=>btn.addEventListener('click',()=>{
     if(btn.dataset.g==='all'){
       gfSet.clear();
@@ -1982,22 +2159,7 @@ button{cursor:pointer}
     }
   }));
 
-  $$('.result').forEach(r=>r.addEventListener('click',()=>{
-    const no=r.dataset.hit, rom=r.dataset.romname;
-    title.textContent=rom; sideName.textContent=rom; sideInput.value=rom;
-    closeDrawers();
-    $$('.dex-item').forEach(x=>x.classList.remove('highlight'));
-    const target=$('.dex-item[data-no="'+String(no).padStart(3,'0')+'"]');
-    if(target){
-      const natDex=target.closest('.national-dex');
-      if(natDex) natDex.open=true;
-      target.style.display='';
-      target.classList.add('highlight');
-      $('#focus-label').textContent='🔍 '+target.dataset.name+' を表示中';
-      $('#focusbar').classList.add('show');
-      setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}),50);
-    }
-  }));
+  // 全ROM横断検索の結果は動的生成に変わったため、クリックジャンプは別ステップで作り直す予定(現時点では未接続)。
   $('#clear-focus').onclick=()=>{$$('.dex-item').forEach(x=>x.classList.remove('highlight'));$('#focusbar').classList.remove('show')};
 
   // Backup / Export / Import.
@@ -2104,19 +2266,13 @@ button{cursor:pointer}
         playthroughMemos[key.slice('playthroughMemo:'.length)] = await idbGet(key);
       }
     }
-    const distributionState = (await idbGet('distributionState')) || {};
-    const taskState = (await idbGet('taskState')) || {};
-    const theme = (await idbGet('theme')) || 'light';
     return {
       app: 'GoHOME cherish',
       exportedAt: new Date().toISOString(),
-      version: 3,
+      version: 2,
       romList,
       dexStates,
-      playthroughMemos,
-      distributionState,
-      taskState,
-      theme
+      playthroughMemos
     };
   }
 
@@ -2287,9 +2443,6 @@ button{cursor:pointer}
       for(const romId in (data.playthroughMemos||{})){
         await idbSet('playthroughMemo:'+romId, data.playthroughMemos[romId]);
       }
-      if(data.distributionState) await idbSet('distributionState', data.distributionState);
-      if(data.taskState) await idbSet('taskState', data.taskState);
-      if(data.theme) await idbSet('theme', data.theme);
       toast('読み込みました。ページを再読み込みします…');
       setTimeout(()=>location.reload(), 1200);
     }catch(err){
@@ -2355,10 +2508,8 @@ button{cursor:pointer}
   let refreshStickyDexHead = ()=>{};
   (function setupStickyDexHead(){
     const bar = $('#sticky-dex-head');
+    let lastY = window.scrollY;
     let hidden = false;
-    let anchorY = window.scrollY; // 「表示していた/隠していた」を切り替えた地点のY座標
-    const HIDE_THRESHOLD = 24; // この量だけ下にスクロールしたら隠す
-    const SHOW_THRESHOLD = 16; // この量だけ上にスクロールしたら出す
 
     function updateVisibility(){
       // 図鑑一覧が実際に画面内にある時だけ、この固定見出しを使う
@@ -2367,23 +2518,14 @@ button{cursor:pointer}
       bar.style.display='';
 
       const y = window.scrollY;
-      if(y <= 80){
-        // 図鑑の先頭付近では常に表示する
+      const delta = y - lastY;
+      // 一定量より強く下にスクロールしたら隠す。少しでも上に戻せばすぐ出す。
+      if(delta > 6 && y > 80){
+        if(!hidden){ bar.classList.add('hide'); hidden = true; }
+      } else if(delta < -4 || y <= 80){
         if(hidden){ bar.classList.remove('hide'); hidden = false; }
-        anchorY = y;
-        return;
       }
-      if(!hidden && y - anchorY > HIDE_THRESHOLD){
-        bar.classList.add('hide'); hidden = true; anchorY = y;
-      } else if(hidden && anchorY - y > SHOW_THRESHOLD){
-        bar.classList.remove('hide'); hidden = false; anchorY = y;
-      } else if(!hidden){
-        // 表示中に上下し続けている間は基準点を更新し続け、後から急に隠れないようにする
-        if(y < anchorY) anchorY = y;
-      } else {
-        // 非表示中に、さらに下にスクロールしている間は基準点を更新し続ける
-        if(y > anchorY) anchorY = y;
-      }
+      lastY = y;
     }
     window.addEventListener('scroll', updateVisibility, {passive:true});
     refreshStickyDexHead = updateVisibility;
